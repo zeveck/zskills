@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Z Skills System</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #bc8cff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --pink: #f778ba;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    scroll-behavior: smooth;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.9em;
+  }
+  code {
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  pre code { background: none; padding: 0; }
+
+  /* Nav */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(13,17,23,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex; gap: 20px; align-items: center;
+    overflow-x: auto;
+    font-size: 0.85em;
+  }
+  nav a { color: var(--text-dim); white-space: nowrap; }
+  nav a:hover { color: var(--accent); text-decoration: none; }
+  nav .logo { color: var(--accent); font-weight: 700; font-size: 1.1em; }
+
+  /* Container */
+  .container { max-width: 1000px; margin: 0 auto; padding: 80px 24px 60px; }
+  section { margin-bottom: 64px; }
+  h2 {
+    font-size: 1.8em;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 1.3em; margin: 24px 0 8px; color: var(--accent); }
+  p { margin: 12px 0; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 80px 0 40px;
+  }
+  .hero h1 {
+    font-size: 3em;
+    line-height: 1.15;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 24px;
+  }
+  .hero p {
+    font-size: 1.05em;
+    color: var(--text-dim);
+    max-width: 780px;
+    margin: 0 auto 16px;
+    text-align: left;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9em;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--text);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:hover td { background: rgba(88,166,255,0.04); }
+
+  /* Badges / pills */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .badge-orchestrator { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-builder { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-validator { background: rgba(188,140,255,0.15); color: var(--accent2); }
+  .badge-reporter { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .badge-utility { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+
+  /* Details / collapsible */
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+  }
+  details summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent);
+    user-select: none;
+  }
+  details summary:hover { color: var(--accent2); }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  details .details-body {
+    padding: 16px 20px;
+  }
+  details table { margin: 8px 0; }
+
+  /* Prominent catalog details */
+  details.catalog {
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    margin: 24px 0;
+  }
+  details.catalog summary {
+    font-size: 1.15em;
+    padding: 18px 24px;
+    color: var(--text);
+  }
+  details.catalog summary:hover { color: var(--accent); }
+
+  /* Skill grid inside details */
+  .skill-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .skill-mini {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--border);
+  }
+  .skill-mini h5 {
+    font-size: 0.9em;
+    margin-bottom: 2px;
+  }
+  .skill-mini p {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    margin: 0;
+  }
+  .skill-mini .badge { margin-left: 6px; vertical-align: middle; }
+
+  /* Strength indicators */
+  .strength-high { color: var(--green); font-weight: 600; }
+  .strength-low { color: var(--orange); font-weight: 600; }
+
+  /* Fade in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Workflow flow cards */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 16px 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 120px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px 12px;
+    text-align: center;
+    position: relative;
+    font-size: 0.85em;
+  }
+  .flow-step:first-child { border-radius: 8px 0 0 8px; }
+  .flow-step:last-child { border-radius: 0 8px 8px 0; }
+  .flow-step h5 {
+    color: var(--accent);
+    font-size: 0.9em;
+    margin-bottom: 4px;
+  }
+  .flow-step p { font-size: 0.8em; color: var(--text-dim); margin: 0; }
+  .flow-step + .flow-step::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid var(--accent);
+    z-index: 1;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 2em; }
+    .flow { flex-direction: column; }
+    .flow-step { border-radius: 0 !important; }
+    .flow-step:first-child { border-radius: 8px 8px 0 0 !important; }
+    .flow-step:last-child { border-radius: 0 0 8px 8px !important; }
+    .flow-step + .flow-step::before { display: none; }
+    nav { gap: 12px; font-size: 0.75em; }
+    .skill-mini-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">Z Skills</span>
+  <a href="#skills">20 Skills</a>
+  <a href="#quickstart">Typical Workflow</a>
+  <a href="#workflows">Workflows</a>
+  <a href="#schedulable">Schedulable</a>
+  <a href="#patterns">Patterns</a>
+  <a href="#safety">Safety</a>
+  <a href="https://github.com/zeveck/zskills">GitHub</a>
+</nav>
+
+<div class="container">
+
+<!-- HERO -->
+<section class="hero" style="margin-bottom: 6px; padding-bottom: 20px;">
+  <h1>Z Skills System</h1>
+  <p>Z Skills turns Claude Code into a disciplined engineering team. 20 structured workflows that plan, build, test, fix, and ship &mdash; with verification at every step. Each skill encodes a workflow that used to need hands-on guidance, so it runs with a single command.</p>
+  <p>Currently: 15 core skills and 5 domain extensions covering plan drafting, feature implementation, bug fixing, verification, testing, documentation, and safe code landing. Six support cron scheduling for unattended execution.</p>
+</section>
+
+<!-- ALL 20 SKILLS -->
+<section id="skills" class="fade-in" style="margin-top: 0; padding-top: 0;">
+      <div class="skill-mini-grid" style="grid-template-columns: 1fr; max-width: 600px; margin: 0 auto 24px;">
+        <div class="skill-mini" style="border-color: var(--accent); border-width: 2px;">
+          <h5><code>/research-and-go</code></h5>
+          <p>The full pipeline in one command. Decomposes a broad goal into sub-plans, drafts each with adversarial review, then executes all of them autonomously. One command, walk away.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 8px 0 12px;">Plan</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--accent);">
+          <h5><code>/research-and-plan</code></h5>
+          <p>Decomposes broad goals into focused sub-plans via domain research, dependency analysis, and scope bounding. Each sub-plan drafted upfront via <code>/draft-plan</code>; outputs a meta-plan for <code>/run-plan</code>.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--accent);">
+          <h5><code>/draft-plan</code></h5>
+          <p>Adversarial plan drafting. Multiple agents research, draft, review, play devil's advocate, refine over up to 3 rounds. Scope check escalates to <code>/research-and-plan</code> when the task is too big.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--accent);">
+          <h5><code>/plans</code></h5>
+          <p>Plan dashboard. View index, find next ready plan, batch-execute.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">Build</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--green);">
+          <h5><code>/run-plan</code></h5>
+          <p>The plan execution engine. Dispatches implementation in a worktree, verifies with a separate agent, updates progress, writes reports. Staleness check refreshes dependent plans. Rebase-before-commit for clean history. Supports <code>finish</code> mode and cron scheduling.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--green);">
+          <h5><code>/do</code></h5>
+          <p>Lightweight dispatcher for ad-hoc tasks. Worktree isolation, auto-push, cron scheduling. For work too small for <code>/run-plan</code>.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--green);">
+          <h5><code>/commit</code></h5>
+          <p>Inventories changes, classifies by scope, traces imports recursively, protects other agents' work. Pre-staging index check. Supports push and land modes.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">Quality</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--accent2);">
+          <h5><code>/verify-changes</code></h5>
+          <p>Pre-commit quality gate. Reviews diffs, checks test coverage, runs all suites, manually verifies UI with playwright-cli, fixes problems, re-verifies until clean. Pre-existing failure protocol.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--accent2);">
+          <h5><code>/qe-audit</code></h5>
+          <p>Commit audit: reviews recent commits for test gaps. Bash mode: adversarial stress-testing. Both file GitHub issues.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--accent2);">
+          <h5><code>/manual-testing</code></h5>
+          <p>Playwright-cli recipes with exact CSS selectors, event sequences, and auth bypass for browser-based verification.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">Fix</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--orange);">
+          <h5><code>/fix-issues</code></h5>
+          <p>Batch bug-fixing sprints with auto-sync from GitHub. Prioritizes by severity, dispatches parallel worktree agents, collects results, auto-lands passing fixes. Supports cron for overnight execution.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--orange);">
+          <h5><code>/fix-report</code></h5>
+          <p>Interactive companion to <code>/fix-issues</code>. Presents sprint results with diffs and test results. Every step ends with STOP AND WAIT for user judgment.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--orange);">
+          <h5><code>/review-feedback</code></h5>
+          <p>Triages exported user feedback JSON, deduplicates against existing issues, files via <code>gh</code>.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--orange);">
+          <h5><code>/investigate</code></h5>
+          <p>Root-cause debugging: reproduce, trace, prove the cause with evidence, write regression test, then fix. No guessing.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">Utility &amp; Reference</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--text-dim);">
+          <h5><code>/briefing</code></h5>
+          <p>Project status briefing: summary (triage), report (markdown), verify (sign-off items), current (in-flight), worktrees (cleanup readiness).</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--text-dim);">
+          <h5><code>/doc</code></h5>
+          <p>Documentation audit and gap-filling across modules, examples, and high-level docs. Three modes, including newsletter generation.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--text-dim);">
+          <h5><code>/setup-zskills</code></h5>
+          <p>Bootstrap the Z Skills system into a new project: copies skill files, configures settings, adapts instructions to the target codebase.</p>
+        </div>
+      </div>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">Domain Extensions</h4>
+      <div class="skill-mini-grid">
+        <div class="skill-mini" style="border-color: var(--pink);">
+          <h5><code>/add-block</code></h5>
+          <p>Full 13-step lifecycle for new component types: plan, implement, register, UI, docs, tests, example, codegen, deploy, manual testing, verification, landing.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--pink);">
+          <h5><code>/add-example</code></h5>
+          <p>Example project creation: research the concept, design layout, build project file, register, test, screenshot, verify end-to-end.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--pink);">
+          <h5><code>/model-design</code></h5>
+          <p>Layout guidelines for diagrams and charts, based on industry standards and best practices.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--pink);">
+          <h5><code>/manual-testing</code></h5>
+          <p>Playwright-cli recipes with exact selectors and event sequences for UI testing.</p>
+        </div>
+        <div class="skill-mini" style="border-color: var(--pink);">
+          <h5><code>/review-feedback</code></h5>
+          <p>Triage user feedback, deduplicate against existing issues, file via GitHub CLI.</p>
+        </div>
+      </div>
+
+</section>
+
+<!-- TYPICAL WORKFLOW -->
+<section id="quickstart" class="fade-in">
+  <h2>Typical Workflow</h2>
+
+  <table>
+    <tr><th>Command</th><th>What It Does</th><th>When</th></tr>
+    <tr>
+      <td><code>/briefing</code></td>
+      <td>See what happened, what needs attention, what's in flight</td>
+      <td>Start of session</td>
+    </tr>
+    <tr>
+      <td><code>/draft-plan plans/FOO.md</code></td>
+      <td>Research, draft, and refine a plan through adversarial review</td>
+      <td>Starting a feature</td>
+    </tr>
+    <tr>
+      <td><code>/run-plan plans/FOO.md finish auto</code></td>
+      <td>Execute all remaining phases autonomously</td>
+      <td>Implementing</td>
+    </tr>
+    <tr>
+      <td><code>/verify-changes</code></td>
+      <td>Audit diffs, run tests, manual-test UI, fix issues</td>
+      <td>Before committing</td>
+    </tr>
+    <tr>
+      <td><code>/commit</code></td>
+      <td>Stage with dependency tracing, protect other agents' work</td>
+      <td>Landing code</td>
+    </tr>
+  </table>
+</section>
+
+<!-- THE FOUR WORKFLOWS -->
+<section id="workflows" class="fade-in">
+  <h2>How They Work Together</h2>
+
+  <h3>1. Build Features</h3>
+  <div class="flow">
+    <div class="flow-step"><h5>/research-and-plan</h5><p>Decompose broad goals into sub-plans with dependency analysis.</p></div>
+    <div class="flow-step"><h5>/draft-plan</h5><p>Research, draft, review, devil's advocate. Up to 3 rounds.</p></div>
+    <div class="flow-step"><h5>/run-plan</h5><p>Worktree agent implements each phase. Delegate mode for meta-plans.</p></div>
+    <div class="flow-step"><h5>/verify-changes</h5><p>Diff review, test coverage, manual test. Recursive until clean.</p></div>
+    <div class="flow-step"><h5>/commit land</h5><p>Trace dependencies, cherry-pick to main, protect other agents' work.</p></div>
+  </div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">For broad goals, start with <code>/research-and-plan</code> which decomposes into sub-plans. For focused features, start directly with <code>/draft-plan</code>. Meta-plan phases use delegate mode &mdash; <code>/run-plan</code> invokes the delegated skill on main instead of a worktree.</p>
+
+  <h3>2. Add Components and Examples</h3>
+  <p><code>/add-block UserAuth</code></p>
+  <div class="flow">
+    <div class="flow-step"><h5>Research</h5><p>Check for plan, spawn research agent if needed.</p></div>
+    <div class="flow-step"><h5>Implement</h5><p>Worktree: component class, registration, UI, docs, tests.</p></div>
+    <div class="flow-step"><h5>Test</h5><p>Unit tests, <code>/add-example</code>, manual testing, screenshots.</p></div>
+    <div class="flow-step"><h5>Verify &amp; Land</h5><p>Fresh agent verifies. Report with sign-off. Cherry-pick to main.</p></div>
+  </div>
+
+  <h3>3. Quality Assurance</h3>
+  <p><code>/qe-audit every day at 9am</code> &bull; <code>/verify-changes</code> &bull; <code>/manual-testing</code></p>
+  <div class="flow">
+    <div class="flow-step"><h5>/qe-audit</h5><p>Scheduled commit audit. Files GitHub issues for gaps.</p></div>
+    <div class="flow-step"><h5>/verify-changes</h5><p>Recursive: audit diffs, run tests, manual-test, fix, re-verify.</p></div>
+    <div class="flow-step"><h5>/manual-testing</h5><p>Exact selectors, real events. No page.evaluate().</p></div>
+    <div class="flow-step"><h5>/fix-issues</h5><p>QA issues feed into batch bug-fix sprints.</p></div>
+  </div>
+
+  <h3>4. Fix Bugs at Scale</h3>
+  <p><code>/fix-issues sync</code> &rarr; <code>/fix-issues 30 correctness auto every 4h</code> &rarr; <code>/fix-issues plan</code></p>
+  <div class="flow">
+    <div class="flow-step"><h5>Sync</h5><p>Update trackers from GitHub. Research new issues.</p></div>
+    <div class="flow-step"><h5>Fix</h5><p>Parallel worktree agents, 1 per issue. Reproduce, fix, test.</p></div>
+    <div class="flow-step"><h5>Report</h5><p>SPRINT_REPORT.md. <code>/fix-report</code> for user sign-off.</p></div>
+    <div class="flow-step"><h5>Plan</h5><p>"Too complex" skips &rarr; <code>/draft-plan</code> &rarr; <code>/run-plan</code>.</p></div>
+  </div>
+</section>
+
+<!-- SCHEDULABLE SKILLS -->
+<section id="schedulable" class="fade-in">
+  <h2>Schedulable Skills</h2>
+  <p>Six skills support cron scheduling with a common API pattern.</p>
+
+  <table>
+    <tr><th>Skill</th><th>Example</th><th>What Gets Scheduled</th></tr>
+    <tr>
+      <td><code>/run-plan</code></td>
+      <td><code>/run-plan plans/FOO.md auto every 4h now</code></td>
+      <td>One phase per cron fire, auto-advances to next</td>
+    </tr>
+    <tr>
+      <td><code>/fix-issues</code></td>
+      <td><code>/fix-issues 10 auto every 4h now</code></td>
+      <td>Full sprint each fire (sync, prioritize, fix, land)</td>
+    </tr>
+    <tr>
+      <td><code>/do</code></td>
+      <td><code>/do Check docs every day at 9am</code></td>
+      <td>Repeats the task description each fire</td>
+    </tr>
+    <tr>
+      <td><code>/qe-audit</code></td>
+      <td><code>/qe-audit every day at 9am now</code></td>
+      <td>Commit audit + issue filing each fire</td>
+    </tr>
+    <tr>
+      <td><code>/plans</code></td>
+      <td><code>/plans work 3 auto every 6h</code></td>
+      <td>Execute next 3 ready plans each fire</td>
+    </tr>
+    <tr>
+      <td><code>/briefing</code></td>
+      <td><code>/briefing report 24h every day at 9am</code></td>
+      <td>Daily briefing report</td>
+    </tr>
+  </table>
+
+  <h3>Common Flags</h3>
+  <table>
+    <tr><th>Flag</th><th>Meaning</th></tr>
+    <tr><td><code>auto</code></td><td>Bypass user approval gates (implied by <code>every</code>)</td></tr>
+    <tr><td><code>every &lt;schedule&gt;</code></td><td><code>4h</code>, <code>12h</code>, <code>day at 9am</code>, <code>weekday at 2pm</code></td></tr>
+    <tr><td><code>now</code></td><td>Run immediately AND schedule (without <code>now</code>, only schedules)</td></tr>
+    <tr><td><code>stop</code></td><td>Cancel the cron</td></tr>
+    <tr><td><code>next</code></td><td>Show when the next fire is</td></tr>
+  </table>
+
+  <p style="color: var(--text-dim); font-style: italic; margin-top: 16px;">All crons are session-scoped (die when the session ends), self-deduplicating (new schedule replaces old), and self-perpetuating (each fire re-registers the cron).</p>
+</section>
+
+<!-- SHARED PATTERNS -->
+<section id="patterns" class="fade-in">
+  <h2>Shared Patterns</h2>
+  <p>Seven patterns recur across the system.</p>
+
+  <table>
+    <tr><th>Pattern</th><th>What It Does</th></tr>
+    <tr>
+      <td><strong>Worktree isolation</strong></td>
+      <td>Each agent works in a separate git worktree. <code>scripts/port.js</code> gives each a deterministic dev server port.</td>
+    </tr>
+    <tr>
+      <td><strong>Cron scheduling</strong></td>
+      <td><code>every 2h</code>, <code>now</code>, <code>stop</code>, <code>next</code> -- six skills self-schedule for autonomous execution.</td>
+    </tr>
+    <tr>
+      <td><strong>Transcript-based hooks</strong></td>
+      <td>The hook reads the session transcript (written by the runtime, not the agent) to verify tests actually ran.</td>
+    </tr>
+    <tr>
+      <td><strong>Fresh-agent verification</strong></td>
+      <td>The agent that wrote the code must not verify it. A separate agent with no memory audits diffs.</td>
+    </tr>
+    <tr>
+      <td><strong>User gates</strong></td>
+      <td>Critical decisions (landing code, closing issues) require explicit user approval. Skills STOP and wait.</td>
+    </tr>
+    <tr>
+      <td><strong>Report generation</strong></td>
+      <td>Persistent Markdown reports with sign-off checklists, screenshots, and verification instructions.</td>
+    </tr>
+    <tr>
+      <td><strong>Dependency tracing</strong></td>
+      <td>Before staging, recursively trace imports. If <code>A.js</code> imports <code>B.js</code>, both get committed.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- SAFETY AND RELIABILITY -->
+<section id="safety" class="fade-in">
+  <h2>Safety and Reliability</h2>
+  <p>Agents work in worktrees, but they still need guardrails. The system uses a PreToolUse hook (<code>block-unsafe.sh</code>) that reads the session transcript to enforce key invariants:</p>
+
+  <table>
+    <tr><th>What's Enforced</th><th>How</th></tr>
+    <tr>
+      <td>Tests before committing code</td>
+      <td>Transcript must contain test runner invocation</td>
+    </tr>
+    <tr>
+      <td>Manual testing before committing UI changes</td>
+      <td>Transcript must contain <code>playwright-cli</code></td>
+    </tr>
+    <tr>
+      <td>Tests before cherry-picking to main</td>
+      <td>Transcript must contain test runner invocation</td>
+    </tr>
+    <tr>
+      <td>No destructive git commands</td>
+      <td><code>git checkout --</code>, <code>git restore</code>, <code>git stash drop</code>, <code>git add .</code> all blocked</td>
+    </tr>
+    <tr>
+      <td>No force pushes or kill commands</td>
+      <td><code>git push --force</code>, <code>rm -rf</code>, <code>kill -9</code> blocked</td>
+    </tr>
+    <tr>
+      <td>No piping test output</td>
+      <td>Blocks test commands with <code>|</code> -- must capture to file</td>
+    </tr>
+    <tr>
+      <td>No directory-level log staging</td>
+      <td>Blocks <code>git add .claude/logs/</code></td>
+    </tr>
+  </table>
+
+  <p>The hook runs on every Bash tool call. It reads the transcript (written by the Claude Code runtime, not the agent) so evidence cannot be fabricated.</p>
+
+  <p>Skills add softer enforcement at decision points: pre-landing checklists, verification timeouts (45 min for verifiers, 2h for implementers), and a Failure Protocol that kills crons and preserves state on errors.</p>
+
+  <details>
+    <summary>Incident Log and Lessons Learned (click to expand)</summary>
+    <div class="details-body">
+
+      <p>Every safety rule traces back to a real incident. Here are the ones that shaped the system.</p>
+
+      <table>
+        <tr><th>Incident</th><th>What Happened</th><th>What It Drove</th></tr>
+        <tr>
+          <td><strong>17-File Wipe</strong></td>
+          <td>Agent "cleaned up" 17 files of other agents' uncommitted work</td>
+          <td>Hook blocks <code>git checkout --</code>, <code>git restore</code></td>
+        </tr>
+        <tr>
+          <td><strong>9-File Stash Drop</strong></td>
+          <td><code>git stash pop</code> failed; agent ran <code>git stash drop</code>, destroying the only copy</td>
+          <td>Hook blocks <code>git stash drop/clear</code></td>
+        </tr>
+        <tr>
+          <td><strong>Silent 13-Fix Revert</strong></td>
+          <td>Agent checked out old files to investigate, never restored them, committed -- reverting 13 fixes</td>
+          <td>Hook blocks <code>git checkout &lt;commit&gt; -- &lt;file&gt;</code></td>
+        </tr>
+        <tr>
+          <td><strong>50-Fix Sweep</strong></td>
+          <td><code>git add .</code> swept another session's unfinished changes into a 50-fix commit</td>
+          <td>Hook blocks <code>git add .</code> / <code>git add -A</code></td>
+        </tr>
+        <tr>
+          <td><strong>Visual Feature Disaster</strong></td>
+          <td>100% visual feature landed with zero manual testing or screenshots</td>
+          <td>Transcript hooks require <code>playwright-cli</code> for UI commits</td>
+        </tr>
+        <tr>
+          <td><strong>Issue Misread</strong></td>
+          <td>"Reset button" paraphrased as "clear canvas" -- wrong feature built</td>
+          <td>Verbatim issue body + plan text in all agent dispatches</td>
+        </tr>
+        <tr>
+          <td><strong>3-Hour Test Thrash</strong></td>
+          <td>Agents wasted 3 hours trying to run tests in worktrees without dev servers</td>
+          <td>Verbatim test recipe included in every agent dispatch</td>
+        </tr>
+        <tr>
+          <td><strong>Auto-mode Bleed</strong></td>
+          <td>After auto-mode execution, agent kept committing without permission in interactive mode. Context compaction preserved the auto-commit pattern.</td>
+          <td>Explicit mode reset after auto runs</td>
+        </tr>
+        <tr>
+          <td><strong>Pre-staged Sweep</strong></td>
+          <td>Commit swept 146 lines of another session's work because files were pre-staged in the index</td>
+          <td>Pre-staging index check in <code>/commit</code></td>
+        </tr>
+        <tr>
+          <td><strong>Force-removed Worktree Logs</strong></td>
+          <td>Agent dismissed modified logs as "just log files" and force-removed worktree, losing the build record</td>
+          <td>Log extraction requirement before worktree removal</td>
+        </tr>
+      </table>
+
+      <h4 style="color: var(--accent); margin: 24px 0 12px;">What we've learned about LLM compliance</h4>
+
+      <table>
+        <tr><th>Approach</th><th>Effectiveness</th></tr>
+        <tr><td>Hook hard blocks</td><td><span class="strength-high">High</span></td></tr>
+        <tr><td>Concrete recipes at decision points</td><td><span class="strength-high">High</span></td></tr>
+        <tr><td>Verbatim text requirements</td><td><span class="strength-high">High</span></td></tr>
+        <tr><td>Transcript-based verification</td><td><span class="strength-high">High</span></td></tr>
+        <tr><td>Past failure stories in prompts</td><td><span class="strength-low">Low-Med</span></td></tr>
+        <tr><td>Rules in long appendix sections</td><td><span class="strength-low">Low</span></td></tr>
+      </table>
+
+    </div>
+  </details>
+</section>
+
+<!-- CLOSING -->
+<section class="fade-in" style="text-align:center; padding: 40px 0; border-top: 2px solid var(--border);">
+  <p style="font-size: 1.05em; color: var(--text); max-width: 800px; margin: 0 auto;"><strong>20 skills that plan, build, test, fix, and ship &mdash; so one developer can run a full engineering team.</strong></p>
+  <p style="margin-top: 16px;"><a href="https://github.com/zeveck/zskills">github.com/zeveck/zskills</a></p>
+  <p style="margin-top: 24px; font-size: 0.85em; color: var(--text-dim);">Built with Claude Code (Claude Opus 4.6) &mdash; Z Skills System.</p>
+</section>
+
+</div>
+
+<script>
+  // Fade-in on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+---
+name: briefing
+argument-hint: "[report [period]] | verify | current | worktrees | [summary] | stop | next"
+description: >-
+  Generate a project briefing: worktree status, open checkboxes, recent commits.
+  Modes: summary (default), report, verify, current, worktrees. Period: 1h, 6h, 24h, 2d, 7d.
+---
+
+# /briefing — Project Status Briefing
+
+Gather project state and present a structured briefing.
+
+## Argument Parsing
+
+Parse `$ARGUMENTS` to determine mode, options, and optional schedule:
+
+```
+$ARGUMENTS = ""              → mode: summary
+$ARGUMENTS = "summary"       → mode: summary
+$ARGUMENTS = "report"        → mode: report, period: 24h
+$ARGUMENTS = "report 7d"     → mode: report, period: 7d
+$ARGUMENTS = "verify"        → mode: verify
+$ARGUMENTS = "current"       → mode: current
+$ARGUMENTS = "worktrees"     → mode: worktrees
+$ARGUMENTS = "stop"          → meta: cancel scheduled briefings
+$ARGUMENTS = "next"          → meta: show next scheduled briefing
+$ARGUMENTS = "report 24h every day at 9am" → mode: report, schedule
+```
+
+**Period shorthand:** `1h`, `6h`, `24h` (default), `1d`, `2d`, `7d`
+
+**Schedule detection:** If `$ARGUMENTS` contains `every <SCHEDULE>`, strip the schedule
+portion and handle scheduling separately (see Scheduling section below).
+
+## Mode Dispatch
+
+### `summary` (default — empty or unrecognized arguments)
+
+Quick terminal-only triage view. The helper outputs pre-formatted text.
+
+```bash
+node scripts/briefing.cjs summary --since=<period>
+```
+
+Present the output **verbatim** — it is already formatted with three buckets:
+- **NEEDS ATTENTION** — worktrees needing review, unchecked checkboxes, uncommitted files
+- **LANDED SINCE LAST 24H** — recent commits grouped by conventional type
+- **IN FLIGHT** — possibly-active worktrees, stash entries
+- **QUIET** — count of landed/empty worktrees (no action needed)
+- **WARNINGS** — staleness warnings if applicable
+
+### `report`
+
+Generate a detailed markdown report and write it to `reports/`.
+
+```bash
+node scripts/briefing.cjs report --since=<period>
+```
+
+The helper writes the file directly and prints its path. Report includes:
+- Summary counts (commits, worktrees, checkboxes)
+- Needs Attention section with review checklists
+- Landed on Main table
+- Worktree Status table
+- In Progress section
+
+Checkbox state from earlier same-day reports is preserved automatically.
+
+Present: "Report written to: `<path>`" with a brief summary of key findings.
+
+### `verify`
+
+Aggregate all pending sign-off items into a single view.
+
+```bash
+node scripts/briefing.cjs verify
+```
+
+Present the output **verbatim**. Sections:
+- **UNMERGED WORKTREES** — worktrees with commits not yet on main
+- **REPORT SIGN-OFF** — unchecked `[ ]` items grouped by file
+- **PARTIAL LANDINGS** — worktrees where some commits were skipped
+
+Empty state: `ALL CLEAR — no pending items.`
+
+### `current`
+
+Show what's actively in flight right now.
+
+```bash
+node scripts/briefing.cjs current
+```
+
+Present the output **verbatim**. Sections:
+- **POSSIBLY ACTIVE** — worktrees modified in last 2 hours
+- **FINISHED, NOT LANDED** — worktrees with commits, inactive > 2h
+- **EMPTY WORKTREES** — zero commits, safe to remove
+- **UNCOMMITTED ON MAIN** — modified/deleted/untracked file counts
+- **STASH** — git stash entries or "(empty)"
+- **LONG-RUNNING BRANCHES** — named worktrees with commits ahead of main
+
+### `worktrees`
+
+Detailed worktree analysis with cleanup readiness. Read-only — shows what's
+safe to remove but does not remove anything.
+
+```bash
+node scripts/briefing.cjs worktrees-status
+```
+
+Present the output **verbatim**. Sections:
+- **SAFE TO REMOVE** — empty worktrees or all commits verified on main, no unextracted logs. Includes copy-pasteable `git worktree remove` commands.
+- **NEEDS LOG EXTRACTION FIRST** — commits are on main but `.claude/logs/` has modified files. Shows which logs need extraction and how.
+- **NOT SAFE** — has commits not found on main. Shows unlanded commit list.
+- **NAMED / LONG-RUNNING** — named worktrees (feature-branch, etc.), never auto-remove.
+- **ORPHANED** — directories on disk but not registered with `git worktree list`.
+
+**Important:** Always extract logs before removing any worktree. Logs document how work was done — they are part of the project, not disposable artifacts.
+
+## Data Gathering
+
+The agent runs `node scripts/briefing.cjs <subcommand>` and captures stdout.
+
+| Subcommand   | Output   | Description                              |
+|-------------|----------|------------------------------------------|
+| `worktrees` | JSON     | All worktrees with classification        |
+| `checkboxes`| JSON     | Unchecked `[ ]` items from report files  |
+| `commits`   | JSON     | Categorized commits on main              |
+| `summary`   | Text     | Pre-formatted three-bucket triage view   |
+| `report`    | File     | Writes markdown report, prints path      |
+| `verify`    | Text     | Pre-formatted verification checklist     |
+| `current`   | Text     | Pre-formatted in-flight status           |
+| `worktrees-status` | Text | Cleanup readiness report             |
+
+## Worktree Categories
+
+Each worktree is classified into exactly one category:
+
+- **`landed-full`** — `.landed` file with `status: full` (all commits on main)
+- **`landed-partial`** — `.landed` file with `status: partial` (some commits skipped)
+- **`done-needs-review`** — No `.landed`, has commits, inactive > 2 hours
+- **`possibly-active`** — No `.landed`, modified within last 2 hours
+- **`empty`** — No `.landed`, zero commits ahead of main
+- **`named`** — Not an `agent-*` worktree (e.g., feature-branch)
+- **`orphaned`** — Directory exists on disk but not in `git worktree list`
+
+## Scheduling
+
+The `/briefing` skill supports recurring execution via cron.
+
+### Setting a Schedule
+
+If `$ARGUMENTS` contains `every <SCHEDULE>`:
+
+1. Strip the schedule portion from arguments to get the base mode
+2. Create a cron using CronCreate:
+   - `install_command`: `/briefing <base-mode-args>`
+   - `schedule`: parsed from `<SCHEDULE>` (e.g., "day at 9am" → `0 9 * * *`)
+3. Present confirmation with session-scope warning:
+
+```
+Scheduled: /briefing <mode> runs every <schedule>
+
+WARNING: This schedule is tied to this session. If the session ends, the schedule is lost.
+```
+
+### `stop` — Cancel Scheduled Briefings
+
+1. List crons with CronList
+2. Filter for briefing-related crons (install_command starts with `/briefing`)
+3. Delete each with CronDelete
+4. Confirm: "Cancelled N briefing schedule(s)."
+
+### `next` — Show Next Fire Times
+
+1. List crons with CronList
+2. Filter for briefing-related crons
+3. Show each with its next fire time
+4. If none: "No briefing schedules active."
+
+### Common Schedules
+
+| Input | Cron | Description |
+|-------|------|-------------|
+| `every hour` | `0 * * * *` | Top of every hour |
+| `every 2h` | `0 */2 * * *` | Every 2 hours |
+| `every day at 9am` | `0 9 * * *` | Daily at 9 AM |
+| `every weekday at 9am` | `0 9 * * 1-5` | Weekdays at 9 AM |
+
+## Report Template Reference
+
+The `report` subcommand writes this markdown structure:
+
+```markdown
+# Briefing Report — YYYY-MM-DD HH:MM ET
+Period: <since> -> now
+
+## Summary
+- N commits landed on main
+- N worktrees: X need review, Y in flight, Z landed
+- N unchecked sign-off items across M reports
+
+## Needs Attention
+
+### [ ] Review: <worktree-name> (N commits)
+Commits:
+- `hash` subject
+Last modified: <relative time>
+
+### [ ] Sign-off: <report-file> (N unchecked items)
+- [ ] item text (line NN)
+
+## Landed on Main
+| Type | Hash | Subject | Date |
+|------|------|---------|------|
+
+## Worktree Status
+| Worktree | Category | Commits | Last Modified | Notes |
+|----------|----------|---------|---------------|-------|
+
+## In Progress
+| Worktree | Commits | Last Modified | Summary |
+|----------|---------|---------------|---------|
+```
+
+Checkboxes marked `[x]` in earlier same-day reports are preserved in new reports.
+
+## Staleness Warnings
+
+The `summary` subcommand appends warnings when:
+- No briefing report has ever been generated
+- The most recent briefing report is older than 48 hours
+- A `done-needs-review` worktree is older than 7 days (stale)
+
+## Edge Cases
+
+- **Orphaned worktrees** — directories in `.claude/worktrees/` or `worktrees/` not
+  registered with `git worktree list`. Shown with `orphaned` category.
+- **Missing `reports/` directory** — created automatically when writing a report.
+- **Recency filter** — checkbox scanning only checks files modified in last 30 days
+  (or top 10 most recent briefing files) to avoid scanning stale history.
