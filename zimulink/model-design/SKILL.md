@@ -48,7 +48,7 @@ Follow these rules when creating or editing `.zlx` model files, placing blocks p
 - **20px minimum clearance from unrelated blocks.** A line that routes adjacent to or behind a block it is not connected to creates a false visual connection -- proximity implies relationship. Re-route with waypoints, increase block spacing, or use Goto/From blocks. 20px = 2 grid units, the smallest readable gap given Zimulink's 10px grid snap. (ELK `spacing.edgeNode` default: 10 from edge center, yFiles `minimumNodeToEdgeDistance` default: 10, LabVIEW "do not wire under objects", Gestalt proximity principle)
 - **10px minimum between parallel signal lines.** Parallel lines running closer than 10px (1 grid unit) become visually indistinguishable. (ELK `spacing.edgeEdge` default: 10, yFiles `minimumEdgeDistance`)
 - **Minimize bends.** Every bend must be justified by an obstacle or routing constraint. Prefer 0 bends (straight line) when ports are aligned; accept 1--2 bends for typical routing; investigate re-layout if a line requires 3+ bends. (MAAB db_0032c)
-- **Prefer zero-bend connections.** Position connected blocks so that the source output port and destination input port are at the same Y coordinate, producing a straight horizontal line. (Simulink auto-routing: shortest path, fewest turns)
+- **Prefer zero-bend connections.** Position connected blocks so that the source output port and destination input port are at the same Y coordinate, producing a straight horizontal line. (auto-routing best practice: shortest path, fewest turns)
 - **Maximum 2 sub-lines at a single branch point.** For 3+ destinations, use cascaded branch points (each splitting into 2). Branch near the source block. (MAAB db_0032d)
 
 ### Signal Branching
@@ -237,7 +237,7 @@ Key references (80+ total):
 - [MAAB db_0081: Unconnected signals](https://www.mathworks.com/help/slcheck/ref/check-for-unconnected-signal-lines-and-blocks.html)
 - [MAAB na_0008: Signal label display](https://www.mathworks.com/help/simulink/mdl_gd/maab/na_0008displayoflabelsonsignals.html)
 - [MAAB db_0140: Block parameter display](https://www.mathworks.com/help/simulink/mdl_gd/maab/db_0140displayofblockparameters.html)
-- [5 Tips for Readable Simulink Models](https://mburkeonmbd.com/2017/10/03/5-tips-for-more-readable-simulink-models/)
+- [5 Tips for Readable Block Diagram Models](https://mburkeonmbd.com/2017/10/03/5-tips-for-more-readable-simulink-models/)
 - [6 Tips for Readable Stateflow Charts](https://mburkeonmbd.com/2017/10/11/6-tips-for-readable-stateflow-charts/)
 - [UML State Machine Diagramming Guidelines](https://agilemodeling.com/style/statechartdiagram.htm)
 - [ELK Layered Algorithm](https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html)

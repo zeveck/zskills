@@ -14,9 +14,11 @@ workflow stages, enforcement model, and war stories.
 
 ## The Skills
 
-![Build, Quality, and Fix skills](screenshots/skills-build-quality.png)
+![Plan and Build skills](screenshots/skills-plan-build.png)
 
-![Utility and Domain Extension skills](screenshots/skills-fix-utility-domain.png)
+![Quality and Fix skills](screenshots/skills-quality-fix.png)
+
+![Utility, Reference, and Domain Extension skills](screenshots/skills-utility-domain.png)
 
 ## Quick Install
 
@@ -88,7 +90,7 @@ data pipeline.
 
 ### 5 Domain Skills (`zimulink/`)
 
-These are for block-diagram editors and Simulink-like projects. Use them
+These are for block-diagram editors and visual modeling projects. Use them
 directly or as templates for your own domain-specific skills.
 See [`zimulink/README.md`](zimulink/README.md).
 
@@ -164,7 +166,7 @@ See any skill in `skills/` for the full pattern.
 ## Origin
 
 Z Skills was developed as part of [Zimulink](https://github.com/zeveck/zimulink),
-a Simulink clone built in 37 days by one developer directing Claude Code.
+a block-diagram simulation tool built in 37 days by one developer directing Claude Code.
 The skills encode lessons from 800+ commits, 20B+ tokens of agent
 interaction, and dozens of real agent failures that were diagnosed and
 turned into guardrails.

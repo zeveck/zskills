@@ -46,7 +46,7 @@ checked against BlockDefinitions.js. The model loaded but produced wrong output.
 
 ### 1b. Research a real-world model concept
 
-Find a model from textbooks, Simulink examples, control theory papers, or
+Find a model from textbooks, reference examples, control theory papers, or
 engineering tutorials that naturally uses the target block(s). Do NOT invent a
 toy model from scratch — real-world models produce better examples.
 

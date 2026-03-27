@@ -1,6 +1,6 @@
 # Zimulink Domain Skills
 
-These 5 skills are specific to block-diagram editors and Simulink-like
+These 5 skills are specific to block-diagram editors and visual modeling
 projects. They were developed for [Zimulink](https://github.com/zeveck/zimulink)
 and demonstrate how to extend Z Skills with domain-specific workflows.
 

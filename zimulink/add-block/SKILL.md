@@ -43,7 +43,7 @@ Do NOT do step 7 per-block when batching. Defer it until all blocks are implemen
 Look in `plans/blocks/{category}/` for an existing plan file for this block.
 
 - **If a plan exists:** read it and use it as the specification.
-- **If no plan exists:** STOP implementation. Spawn an Explore agent to research the block thoroughly — Simulink documentation, MATLAB help pages, textbooks, behavior, edge cases, parameter semantics — and write a plan file before proceeding.
+- **If no plan exists:** STOP implementation. Spawn an Explore agent to research the block thoroughly — reference documentation, textbooks, behavior, edge cases, parameter semantics — and write a plan file before proceeding.
 
 ### Plan file convention
 
