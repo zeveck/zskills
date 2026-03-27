@@ -4,6 +4,8 @@ These 5 skills are for block-diagram editors and visual modeling
 projects. They demonstrate how to extend Z Skills with domain-specific
 workflows.
 
+![Block diagram domain skills](screenshots/domain-skills.png)
+
 ## Skills
 
 | Skill | Lines | Purpose |
@@ -16,8 +18,9 @@ workflows.
 
 ## Using These Skills
 
-**If your project is a block-diagram editor:** install these alongside the
-core Z Skills. They work out of the box.
+**If your project is a block-diagram editor:** these skills encode proven
+workflows and layout standards. You'll need to adapt file paths and
+selectors to your project's architecture, but the patterns are ready to use.
 
 **If your project is something else:** use these as templates. The patterns
 generalize:

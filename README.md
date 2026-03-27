@@ -18,7 +18,7 @@ workflow stages, enforcement model, and war stories.
 
 ![Quality and Fix skills](screenshots/skills-quality-fix.png)
 
-![Utility, Reference, and Domain Extension skills](screenshots/skills-utility-domain.png)
+![Utility and Reference skills](screenshots/skills-utility.png)
 
 ## Quick Install
 
@@ -88,19 +88,11 @@ data pipeline.
 | `/doc` | Documentation audit, gap-filling, and changelog/newsletter entries |
 | `/setup-zskills` | Install, audit, or update Z Skills infrastructure in any project |
 
-### 5 Domain Skills (`block-diagram/`)
+### Domain Extensions (`block-diagram/`)
 
-These are for block-diagram editors and visual modeling projects. Use them
-directly or as templates for your own domain-specific skills.
-See [`block-diagram/README.md`](block-diagram/README.md).
-
-| Skill | Purpose |
-|-------|---------|
-| `/add-block` | Full lifecycle for new block types: plan, implement, register, test, example, codegen |
-| `/add-example` | Example model creation: research, design, build, register, test, screenshot |
-| `/manual-testing` | Playwright recipes with exact selectors for block-diagram UI testing |
-| `/model-design` | Layout guidelines for block diagrams and state charts (MAAB/NASA standards) |
-| `/review-feedback` | Triage in-app user feedback, deduplicate, file GitHub issues |
+5 additional skills for block-diagram editors and visual modeling projects.
+These are **not** part of the core 15 — they're domain-specific extensions
+that demonstrate how to build your own. See [`block-diagram/README.md`](block-diagram/README.md).
 
 ## What Gets Installed
 
