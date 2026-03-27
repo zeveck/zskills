@@ -1,7 +1,7 @@
 # Z Skills
 
-**17 core skills that plan, build, test, fix, and ship** — so one
-developer can run a full engineering team.
+**20 skills that plan, build, test, fix, and ship** — so one developer
+can run a full engineering team.
 
 Z Skills encode hard-won lessons from real agent failures into reusable
 prompt files. Each skill is a `.claude/skills/SKILL.md` file that teaches

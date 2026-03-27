@@ -297,17 +297,43 @@ Run /setup-zskills audit to verify.
 
 ---
 
-## `update` Mode — Fill Only New Gaps
+## `update` Mode — Pull Latest and Fill Gaps
 
-Same as `install` except:
+1. **Pull latest from upstream.** Find the `zskills/` clone (Step 0) and
+   update it:
+   ```bash
+   git -C "$ZSKILLS_PATH" pull
+   ```
+   If the pull fails (no remote, not a git repo), warn and continue with
+   the local copy as-is.
 
-- **Skip items that already exist** — do not prompt for replacement.
-- **Only show prompts for NEW items** being installed.
-- Existing hooks, scripts, and CLAUDE.md rules are left untouched.
+2. **Diff against installed skills.** For each skill in the source
+   `$ZSKILLS_PATH/skills/`, compare against the installed version in
+   `.claude/skills/`. Report which skills have upstream changes.
 
-Run the full audit, then for each gap: if the item does not already exist,
-install it using the same steps as install mode. If the item already exists,
-skip it silently.
+3. **Update changed skills.** For each skill with upstream changes, copy
+   the new version to `.claude/skills/`. Show the user what changed before
+   overwriting.
+
+4. **Update installed add-ons.** Check if any block-diagram add-on skills
+   are installed (e.g., `.claude/skills/add-block/SKILL.md` exists). If so,
+   update them from `$ZSKILLS_PATH/block-diagram/` the same way.
+
+5. **Fill new gaps.** Run the audit. For any NEW items (skills, hooks,
+   scripts, CLAUDE.md rules) that don't exist yet, install them using
+   the same steps as install mode.
+
+6. **Report:**
+   ```
+   Z Skills updated.
+
+   Updated: N skills (list)
+   Add-ons updated: N (list)
+   New: N items installed (list)
+   Unchanged: N skills
+
+   Source: $ZSKILLS_PATH (pulled from origin)
+   ```
 
 ---
 
