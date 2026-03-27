@@ -156,12 +156,12 @@ export function register{Category}Blocks() {
 
 ## Step 3 — UI Definition
 
-Add a block definition in `src/library/BlockDefinitions.js` inside the appropriate category section.
+Add a block definition in `src/library/block-registry.js` inside the appropriate category section.
 
-### Face text (BlockRenderer.js)
+### Face text (block-renderer.js)
 
 If the block should display text on its face (like "≥", "≤", "If", "Switch",
-"1/s"), add a case in `src/editor/BlockRenderer.js` → `_getBlockFaceText()`.
+"1/s"), add a case in `src/editor/block-renderer.js` → `_getBlockFaceText()`.
 Check sibling blocks in the same category — if they have face text, yours
 probably should too.
 
@@ -203,7 +203,7 @@ param(key, label, type, defaultVal, extra = {})
 
 ### Dynamic ports
 
-If port count depends on parameters, add a case in `src/editor/dynamicPorts.js` → `computeDynamicPorts()`:
+If port count depends on parameters, add a case in `src/editor/dynamic-ports.js` → `computeDynamicPorts()`:
 
 ```javascript
 case 'Name': {
@@ -234,9 +234,9 @@ case 'Name': {
 
 ---
 
-## Step 4 — Block Explorer Data
+## Step 4 — block library panel Data
 
-Add an entry in `src/library/BlockExplorerData.js` under the appropriate category comment:
+Add an entry in `src/library/block-explorer-data.js` under the appropriate category comment:
 
 ```javascript
 Name: {
@@ -252,7 +252,7 @@ Name: {
 
 Do NOT write the documentation yourself. Instead, create tracking issues for the docs work.
 
-If `plans/DOC_ISSUES.md` does not exist, create it first using `plans/RUST_ISSUES.md` as a format reference (summary table at top, entries with GitHub issue cross-references). Use D-numbering: D1, D2, D3...
+If `plans/DOC_ISSUES.md` does not exist, create it first using `plans/BUILD_ISSUES.md` as a format reference (summary table at top, entries with GitHub issue cross-references). Use D-numbering: D1, D2, D3...
 
 ### For each new block
 
@@ -361,14 +361,14 @@ passing all block types as a comma-separated list. One model that showcases
 all the blocks together is better than N separate trivial models.
 
 The `/add-example` skill handles: model file construction with exact port
-alignment, registration in BlockExplorerData.js, codegen compile tests,
+alignment, registration in block-explorer-data.js, codegen compile tests,
 unit tests with value assertions, browser verification, and screenshots.
 
 ---
 
 ## Step 8 — Rust Code Generation
 
-Add a Rust emitter for the block in `src/codegen/BlockEmitter.js`.
+Add a Rust emitter for the block in `src/codegen/block-emitter.js`.
 
 ### Steps
 
@@ -422,7 +422,7 @@ Add the block to the runtime if feasible:
 2. Implement the block logic in the appropriate category file
 3. Run `cargo test` in `runtime/` to verify
 
-If runtime support cannot be added now, file a `RUST_ISSUES.md` entry (same
+If runtime support cannot be added now, file a `BUILD_ISSUES.md` entry (same
 format as the codegen deferral below) noting it's a **runtime gap**, not a
 codegen gap.
 
@@ -434,7 +434,7 @@ handled by `/add-example` (Step 7), not here.
 
 ### If Rust codegen cannot be implemented now
 
-Create a GitHub issue and add an entry to `plans/RUST_ISSUES.md` following the existing format. Check the file first to find the highest R-number and increment it.
+Create a GitHub issue and add an entry to `plans/BUILD_ISSUES.md` following the existing format. Check the file first to find the highest R-number and increment it.
 
 ```markdown
 ### R{next_number}: {Title}
@@ -442,7 +442,7 @@ Create a GitHub issue and add an entry to `plans/RUST_ISSUES.md` following the e
 | Field | Value |
 |-------|-------|
 | **GitHub** | #{issue_number} |
-| **File** | `src/codegen/BlockEmitter.js` |
+| **File** | `src/codegen/block-emitter.js` |
 | **Severity** | Medium |
 | **Status** | OPEN |
 
@@ -457,7 +457,7 @@ Use the `/manual-testing` skill with `playwright-cli` to verify the block works 
 
 ### Required test sequence
 
-1. **Add the block** to a diagram — use Quick Insert (double-click the canvas, type the block name, press Enter) or drag from Block Explorer
+1. **Add the block** to a diagram — use quick-add dialog (double-click the canvas, type the block name, press Enter) or drag from block library panel
 2. **Connect it** — wire source blocks to its inputs and sinks (Scope/Display) to its outputs
 3. **Run a simulation** — click the Run button, verify output is correct
 4. **Vary each parameter one at a time** — double-click the block to open the parameter dialog, change one parameter, apply, re-run, and verify the change has the intended effect on simulation results. Repeat for every parameter.
@@ -465,7 +465,7 @@ Use the `/manual-testing` skill with `playwright-cli` to verify the block works 
 
 ### What to verify
 
-- Block appears correctly in the Block Explorer and Quick Insert search
+- Block appears correctly in the block library panel and quick-add dialog search
 - Block renders with correct ports and parameter display on the canvas
 - Simulation produces expected output values
 - Each parameter independently affects behavior as documented in the plan
@@ -497,7 +497,7 @@ collapsed.
 ### {BlockName}
 - [ ] **Sign off**
 
-1. Add via Quick Insert, connect to a Scope
+1. Add via quick-add dialog, connect to a Scope
 2. Run simulation — verify output is correct
 3. Change each parameter — verify effect
 
@@ -526,29 +526,29 @@ for EACH block added. Fix any failures — do not "note" them as gaps.
 
 ```bash
 # 1. Block registered?
-grep "type: 'BlockType'" src/library/BlockDefinitions.js
+grep "type: 'BlockType'" src/library/block-registry.js
 
 # 2. Engine registered? (quotes prevent matching SubstringBlockType)
 grep "'BlockType'" src/engine/blocks/register/*.js
 
 # 3. Explorer entry? (anchor to line start to avoid substring matches)
-grep "^  BlockType:" src/library/BlockExplorerData.js
+grep "^  BlockType:" src/library/block-explorer-data.js
 
 # 4. Face text? (conditional — check if sibling blocks have it)
-grep -A5 "case 'BlockType'" src/editor/BlockRenderer.js
+grep -A5 "case 'BlockType'" src/editor/block-renderer.js
 
 # 5. Unit tests exist? (quotes prevent substring matches)
 grep -r "'BlockType'" tests/blocks/
 
 # 6. Codegen emitter?
-grep "'BlockType'" src/codegen/BlockEmitter.js
+grep "'BlockType'" src/codegen/block-emitter.js
 
 # 7. Example model features this block? (model files use JSON double quotes)
 grep -rl '"BlockType"' examples/ || echo "NO EXAMPLE FOUND"
 
 # 8. Runtime support OR tracking issue? (Rust uses double quotes)
 grep '"BlockType"' runtime/src/blocks/mod.rs || \
-grep "BlockType" plans/RUST_ISSUES.md
+grep "BlockType" plans/BUILD_ISSUES.md
 
 # 9. Tests pass?
 npm run test:all
@@ -621,12 +621,12 @@ Cherry-pick worktree commits to main. Same process as `/run-plan` Phase 6:
 | 0 | `plans/blocks/{category}/{num}-{name}.md` |
 | 1 | `src/engine/blocks/{category}/{Name}Block.js` |
 | 2 | `src/engine/blocks/register/{category}.js` |
-| 3 | `src/library/BlockDefinitions.js`, optionally `src/editor/dynamicPorts.js` |
-| 4 | `src/library/BlockExplorerData.js` |
+| 3 | `src/library/block-registry.js`, optionally `src/editor/dynamic-ports.js` |
+| 4 | `src/library/block-explorer-data.js` |
 | 5 | GitHub issues + `plans/DOC_ISSUES.md` |
 | 6 | `tests/blocks/{category}.test.js` |
-| 7 | `examples/{model}/`, `src/library/BlockExplorerData.js` (EXAMPLE_MODELS) |
-| 8 | `src/codegen/BlockEmitter.js`, optionally GitHub issue + `plans/RUST_ISSUES.md` |
+| 7 | `examples/{model}/`, `src/library/block-explorer-data.js` (EXAMPLE_MODELS) |
+| 8 | `src/codegen/block-emitter.js`, optionally GitHub issue + `plans/BUILD_ISSUES.md` |
 | 9 | (manual testing — no files) |
 | 10 | `reports/new-blocks-{slug}.md`, `NEW_BLOCKS_REPORT.md` |
 | 11 | (verification — no files) |

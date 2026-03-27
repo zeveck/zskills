@@ -65,7 +65,7 @@ classification:
    git status -s | grep -i <keyword>
    ```
    For `/commit skill updates`, grep for `skill`, `SKILL`, `.claude/skills/`.
-   For `/commit codegen fixes`, grep for `codegen`, `BlockEmitter`, `Rust`.
+   For `/commit codegen fixes`, grep for `codegen`, `block-emitter`, `Rust`.
 
 2. **Diff-check remaining files** — for files that don't match the keyword,
    read the diff to confirm they're unrelated. Some related files won't match

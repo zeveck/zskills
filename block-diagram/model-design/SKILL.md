@@ -24,7 +24,7 @@ Follow these rules when creating or editing model files, placing blocks programm
 - **Align equivalent blocks across parallel paths.** When two or more parallel paths contain blocks of the same type at the same pipeline stage (e.g., both paths have a Gain after a Demux), align them to the same x-coordinate (within 10px). This creates visual columns that make the parallel structure obvious. (ELK layered layer assignment, Sugiyama method)
 
 ### Block Sizing
-- **Default block sizes** (from BlockDefinitions.js):
+- **Default block sizes** (from block-registry.js):
   - Standard blocks (Gain, Sum, etc.): 80x60
   - Scope: 60x60
   - Chart (state machine): 140x100

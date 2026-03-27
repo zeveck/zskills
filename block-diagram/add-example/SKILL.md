@@ -27,22 +27,22 @@ ls examples/
 
 Check if an example already exists that features the target block(s). If so,
 just add the example key to the block's `examples` array in
-`BlockExplorerData.js` and stop.
+`block-explorer-data.js` and stop.
 
 ---
 
 ## Phase 1 — Research & Design
 
-### 1a. Read BlockDefinitions.js for EXACT param names
+### 1a. Read block-registry.js for EXACT param names
 
 ```bash
 # Find the block definition — get param keys, port counts, defaults
-grep -A 30 "type: 'YourBlockType'" src/library/BlockDefinitions.js
+grep -A 30 "type: 'YourBlockType'" src/library/block-registry.js
 ```
 
 **Use the exact `key` values from `param()` calls in your model file.**
 Past failure: used `expression` instead of `expr` because param name was not
-checked against BlockDefinitions.js. The model loaded but produced wrong output.
+checked against block-registry.js. The model loaded but produced wrong output.
 
 ### 1b. Research a real-world model concept
 
@@ -133,7 +133,7 @@ mkdir -p examples/<name>/screenshots
 
 ## Phase 3 — Register
 
-### 3a. Add to EXAMPLE_MODELS in BlockExplorerData.js
+### 3a. Add to EXAMPLE_MODELS in block-explorer-data.js
 
 ```javascript
 'model-key': {

@@ -28,7 +28,7 @@ report, and optionally auto-lands to main. Can self-schedule for recurring runs.
 - **focus** (optional) — prioritize a specific domain:
   - `new` — recently filed issues, user feedback (#382+)
   - `correctness` — simulation/solver correctness (CORRECTNESS_PLAN)
-  - `codegen` — Rust code generation (RUST_ISSUES)
+  - `codegen` — Rust code generation (BUILD_ISSUES)
   - `statemachine` — state machine module (MODULE_ISSUES)
   - `physics` — physics module (MODULE_ISSUES)
   - `ui` — editor/canvas bugs
@@ -198,7 +198,7 @@ Issues that appear already fixed (N candidates):
 |---|-------|---------|----------|
 | #126 | Fcn block mapping | FIXED | SlxImporter.js:85, commit abc1234, 2 tests |
 | #191 | Block stubs | FIXED | All 4 blocks implemented, 12 tests pass |
-| #393 | Fcn codegen u(N) | FIXED | BlockEmitter step 8, commit def5678 |
+| #393 | Fcn codegen u(N) | FIXED | block-emitter.js step 8, commit def5678 |
 | #200 | Some bug | LIKELY FIXED | Code changed but no regression test |
 
 Close 3 FIXED issues? (all / comma-separated numbers / none)
@@ -409,8 +409,8 @@ alert user, write failure to report).
 
 4. **Update ALL issue trackers** — ensure these files reflect current GitHub state:
    - `plans/ISSUES_PLAN.md` (master index)
-   - `plans/CORRECTNESS_PLAN_PHASE0_ISSUES.md` (correctness defects)
-   - `plans/RUST_ISSUES.md` (codegen issues)
+   - `plans/CORRECTNESS_ISSUES.md` (correctness defects)
+   - `plans/BUILD_ISSUES.md` (codegen issues)
    - `plans/QE_ISSUES.md` (test gaps)
    - `plans/DOC_ISSUES.md` (documentation)
    - `plans/MODULE_ISSUES.md` (module-specific features)
@@ -446,8 +446,8 @@ alert user, write failure to report).
 
 2. **Fetch the research blurb from plan files:**
    ```bash
-   grep -A 30 '#<N>' plans/ISSUES_PLAN.md plans/CORRECTNESS_PLAN_PHASE0_ISSUES.md \
-     plans/RUST_ISSUES.md plans/QE_ISSUES.md \
+   grep -A 30 '#<N>' plans/ISSUES_PLAN.md plans/CORRECTNESS_ISSUES.md \
+     plans/BUILD_ISSUES.md plans/QE_ISSUES.md \
      plans/MODULE_ISSUES.md plans/DOC_ISSUES.md 2>/dev/null
    ```
    Plan blurbs contain root cause analysis, affected files, suggested fixes,
@@ -477,7 +477,7 @@ top, then the remaining slots filled by default priority.
 
 **Default ranking criteria (in order):**
 1. New issues not yet attempted (user feedback, recently filed)
-2. Correctness defects (CORRECTNESS_PLAN_PHASE0_ISSUES.md)
+2. Correctness defects (CORRECTNESS_ISSUES.md)
 3. Critical/high severity bugs
 4. Quick wins (15 min – 1 hour)
 5. Issues with clear repro steps
@@ -585,7 +585,7 @@ agent hasn't returned after 1 hour, declare it **failed**:
    paraphrase or summarize — include the full text the user wrote. Titles are
    often vague; the body is the spec. If the body is empty, say so explicitly.
 2. **The research blurb from the plan file** (ISSUES_PLAN.md,
-   CORRECTNESS_PLAN_PHASE0_ISSUES.md, RUST_ISSUES.md, QE_ISSUES.md, etc.).
+   CORRECTNESS_ISSUES.md, BUILD_ISSUES.md, QE_ISSUES.md, etc.).
    These contain root cause analysis, affected files, suggested fixes, and
    effort estimates written when the issue was filed. Grep the plan files for
    the issue number and include any matching section verbatim.

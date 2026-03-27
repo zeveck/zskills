@@ -72,10 +72,10 @@ playwright-cli snapshot
 playwright-cli drag <block-item-ref> --x=400 --y=300
 ```
 
-### Method B: Quick Insert (double-click canvas)
+### Method B: quick-add dialog (double-click canvas)
 
 ```bash
-# 1. Double-click the canvas to open Quick Insert
+# 1. Double-click the canvas to open quick-add dialog
 playwright-cli dblclick "{{CANVAS_SELECTOR}}" --x=400 --y=300
 
 # 2. Type the block name
@@ -234,7 +234,7 @@ output graphs. Screenshot those for visual verification.
 | `Ctrl+Shift+Z`        | Redo                             |
 | `Delete`/`Backspace`  | Delete selected                  |
 | `Ctrl+A`              | Select all                       |
-| Double-click canvas   | Quick Insert (add block)         |
+| Double-click canvas   | quick-add dialog (add block)         |
 | `Ctrl+G`              | Group into Subsystem             |
 | `Ctrl+D`              | Duplicate selected               |
 | `Ctrl+C`/`Ctrl+V`    | Copy / Paste                     |
@@ -251,8 +251,8 @@ Run `ls examples/` to see available models. Load them via URL:
 http://localhost:<port>/?file=examples/<name>/<name>.model
 ```
 
-Available examples include: `voltage-divider`, `smart-thermostat`,
-`rc-charging`, `rlc-series`, and more. Check the directory — don't guess.
+Available examples include: `amplifier-circuit`, `motor-controller`,
+`signal-filter`, `feedback-loop`, and more. Check the directory — don't guess.
 
 ## Common Selectors
 
@@ -311,11 +311,11 @@ Use these to locate elements when snapshot refs aren't sufficient:
 | `{{PROPERTY_APPLY_SELECTOR}}`  | Apply button      |
 | `{{PROPERTY_CANCEL_SELECTOR}}` | Cancel button     |
 
-### Quick Insert
+### quick-add dialog
 
 | Selector                 | Description       |
 | ------------------------ | ----------------- |
-| `{{QUICK_INSERT_SELECTOR}}`       | Quick Insert popup |
+| `{{QUICK_INSERT_SELECTOR}}`       | quick-add dialog popup |
 | `{{QUICK_INSERT_INPUT_SELECTOR}}` | Search text field |
 | `{{QUICK_INSERT_ITEM_SELECTOR}}`  | Result item       |
 

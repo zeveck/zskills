@@ -651,7 +651,7 @@ If no UI files changed, omit the section entirely.}
 ### #1 — Variable viewer panel
 - [ ] **Sign off**
 
-1. Open the app, load a model (e.g., voltage-divider example)
+1. Open the app, load a model (e.g., amplifier-circuit example)
 2. Run the simulation
 3. Click the lightning icon in the toolstrip
 4. Verify the Physical Variables panel opens with columns for V, I, P

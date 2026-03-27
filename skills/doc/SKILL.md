@@ -3,7 +3,7 @@ name: doc
 disable-model-invocation: true
 argument-hint: "[blocks|examples|newsletter|<description>]"
 description: >-
-  Audit and fix documentation gaps: block explorer entries, example models,
+  Audit and fix documentation gaps: block library panel entries, example models,
   getting-started guides, block library, presentations, README updates.
   Also handles newsletter entries (/doc newsletter). Use when the user asks
   to "write a newsletter entry", "add to the newsletter", or "update the newsletter".
@@ -58,7 +58,7 @@ Examples:
 | Example model registry | Component explorer file | `EXAMPLE_MODELS[key] = {path, name, difficulty, description}` |
 | Block reference | `getting-started/BLOCK_LIBRARY.md` | Markdown — all blocks with params and usage |
 | Block specs | `plans/blocks/<category>/` | Markdown — 14 category directories |
-| Docs app catalog | `src/ui/DocsRegistry.js` | Central registry for the `/docs/` app |
+| Docs app catalog | `src/ui/docs-registry.js` | Central registry for the `/docs/` app |
 
 ### Example documentation
 | What | Where | Format |
@@ -67,7 +67,7 @@ Examples:
 | Example README | `examples/<name>/README.md` | Markdown walkthrough |
 | Screenshots | `examples/<name>/screenshots/` | Numbered PNGs: `01-model-overview.png`, `02-simulation-results.png` |
 | Gallery index | `examples/README.md` | Markdown — all examples with images and descriptions |
-| App dropdown | `src/ui/ExamplesDropdown.js` | Categorized dropdown by module |
+| App dropdown | `src/ui/examples-dropdown.js` | Categorized dropdown by module |
 
 ### High-level documentation
 | What | Where | Format |
@@ -76,7 +76,7 @@ Examples:
 | Getting-started guides | `getting-started/` | 22 markdown files — tutorials and references |
 | Newsletter | `getting-started/NEWSLETTER.md` | Chronological feature announcements |
 | Presentations | `presentations/` | Markdown + HTML (4 presentations) |
-| Docs app | `docs/` | JS app reading from DocsRegistry.js |
+| Docs app | `docs/` | JS app reading from docs-registry.js |
 | Viewer | `viewer/` | Standalone markdown viewer |
 | Plans | `plans/` | 37 plan and issue tracking files |
 
@@ -118,18 +118,18 @@ When auditing or documenting examples, check each against this list:
 - [ ] **Gallery entry** in `examples/README.md`
 - [ ] **Explorer links** — block entries in component explorer link to
   this example where relevant
-- [ ] **Category assignment** in `ExamplesDropdown.js` — categorized by
+- [ ] **Category assignment** in `examples-dropdown.js` — categorized by
   module
 
 ### README styles (match existing conventions)
 
-- **Tutorial style** (smart-thermostat): step-by-step with substeps,
+- **Tutorial style** (motor-controller): step-by-step with substeps,
   screenshots at each step, parameter tables, key concepts summary
-- **Model-focused style** (cruise-control): model overview, block list,
+- **Model-focused style** (feedback-loop): model overview, block list,
   expected behavior, files table
-- **Chart design style** (vending-machine): states table, transitions table,
+- **Chart design style** (state-machine-demo): states table, transitions table,
   data section, simulation trace
-- **Visual style** (bouncing-ball-build): minimal text, physics equations,
+- **Visual style** (signal-filter): minimal text, physics equations,
   screenshot-driven
 
 Match the style to the example's complexity and purpose.
@@ -280,7 +280,7 @@ For each gap found:
 - Verify image references point to existing files
 - Verify model files load without errors (if dev server is up)
 - `npm run test:all` if any code files were touched (component explorer,
-  registry file, DocsRegistry.js, ExamplesDropdown.js)
+  registry file, docs-registry.js, examples-dropdown.js)
 
 ### Phase 4 — Report
 

@@ -237,8 +237,8 @@ Then for each approved issue:
 
 2. Update ALL relevant plan files for that issue:
    - `plans/ISSUES_PLAN.md` — `- [ ]` → `- [x]` with commit hash
-   - `plans/CORRECTNESS_PLAN_PHASE0_ISSUES.md` — mark ~~FIXED~~
-   - `plans/RUST_ISSUES.md` — mark ~~FIXED~~
+   - `plans/CORRECTNESS_ISSUES.md` — mark ~~FIXED~~
+   - `plans/BUILD_ISSUES.md` — mark ~~FIXED~~
    - `plans/QE_ISSUES.md` — mark RESOLVED
    - `plans/DOC_ISSUES.md`
    - `plans/MODULE_ISSUES.md`
