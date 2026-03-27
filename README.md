@@ -1,8 +1,7 @@
 # Z Skills
 
-**20 structured workflows for Claude Code** that turn a generic AI into a
-disciplined engineering team. Planning, building, testing, fixing, and
-shipping — with verification at every step.
+**20 skills that plan, build, test, fix, and ship** — so one developer
+can run a full engineering team.
 
 Z Skills encode hard-won lessons from real agent failures into reusable
 prompt files. Each skill is a `.claude/skills/SKILL.md` file that teaches
@@ -10,18 +9,14 @@ Claude Code how to perform a specific workflow with the discipline that
 prevents the most common AI agent failure modes: skipping verification,
 weakening tests, deferring hard parts, and shipping broken code.
 
-## The Pipeline
+**[View the full presentation](PRESENTATION.html)** for the architecture,
+workflow stages, enforcement model, and war stories.
 
-```
-  Plan                Build              Verify             Ship
-  ────                ─────              ──────             ────
-  /draft-plan    ──→  /run-plan     ──→  /verify-changes ──→ /commit
-  /research-and-plan  /do                /qe-audit           /briefing
-  /research-and-go                       /investigate
-  /plans                                 /fix-issues ──→ /fix-report
+## The Skills
 
-  Support: /doc  /setup-zskills
-```
+![Build, Quality, and Fix skills](screenshots/skills-build-quality.png)
+
+![Utility and Domain Extension skills](screenshots/skills-fix-utility-domain.png)
 
 ## Quick Install
 
@@ -36,6 +31,8 @@ git clone https://github.com/zeveck/zskills.git zskills
 `/setup-zskills` copies skills to `.claude/skills/`, installs safety hooks,
 configures helper scripts, and creates CLAUDE.md guardrail rules. It prompts
 for project-specific values (test commands, dev server, source paths).
+
+To update later: `/setup-zskills update` (pulls latest and syncs).
 
 ## Skill Catalog
 
