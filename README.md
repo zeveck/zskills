@@ -90,11 +90,13 @@ data pipeline.
 | `/manual-testing` | Playwright-cli recipes: real mouse/keyboard events, not eval — test as a user would |
 | `/setup-zskills` | Install, audit, or update Z Skills infrastructure in any project |
 
-### Domain Extensions (`block-diagram/`)
+### Block Diagram Add-on (`block-diagram/`)
 
-3 additional skills for block-diagram editors. These are **not** part of
-the core 17 — they're domain-specific extensions that demonstrate how to
-build your own. See [`block-diagram/README.md`](block-diagram/README.md).
+3 additional skills for block-diagram editors. Not part of the core 17 —
+install if your project involves visual block diagrams.
+See [`block-diagram/README.md`](block-diagram/README.md).
+
+![Block Diagram Add-on skills](block-diagram/screenshots/domain-skills.png)
 
 ## What Gets Installed
 
