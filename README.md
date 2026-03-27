@@ -30,11 +30,18 @@ git clone https://github.com/zeveck/zskills.git zskills
 /setup-zskills install
 ```
 
-`/setup-zskills` copies skills to `.claude/skills/`, installs safety hooks,
-configures helper scripts, and creates CLAUDE.md guardrail rules. It prompts
-for project-specific values (test commands, dev server, source paths).
+This installs the **17 core skills**, safety hooks, helper scripts, and
+CLAUDE.md guardrail rules. It prompts for project-specific values (test
+commands, dev server, source paths).
 
-To update later: `/setup-zskills update` (pulls latest and syncs).
+**Block Diagram Add-on** (optional — for visual modeling projects):
+```bash
+for skill in add-block add-example model-design; do
+  cp -r zskills/block-diagram/$skill .claude/skills/$skill
+done
+```
+
+To update later: `/setup-zskills update` (pulls latest and syncs core skills).
 
 ## Skill Catalog
 
