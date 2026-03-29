@@ -22,18 +22,22 @@ workflow stages, enforcement model, and war stories.
 
 ## Quick Install
 
-```bash
-# Clone into your project
-git clone https://github.com/zeveck/zskills.git zskills
+Tell your LLM:
 
-# Tell Claude Code to set up
-/setup-zskills install
+> Install the Z Skills from github.com/zeveck/zskills
+
+It will clone the repo, copy the skills, set up hooks and scripts, and
+create a CLAUDE.md with auto-detected project settings. It detects test
+commands, dev server, and project name from your project files — and uses
+sensible defaults for anything it can't detect.
+
+Or manually clone and tell your LLM to set up:
+
+```bash
+git clone https://github.com/zeveck/zskills.git zskills
 ```
 
-This installs the **17 core skills**, safety hooks, helper scripts, and
-CLAUDE.md guardrail rules. It auto-detects project settings (test commands,
-dev server, project name) from `package.json`, `Cargo.toml`, `Makefile`,
-etc. — you just confirm or override.
+Then: "Set up the Z Skills from the zskills/ directory"
 
 To include the block-diagram add-on (3 extra skills):
 

@@ -31,18 +31,42 @@ is already installed, adding an add-on flag just copies the add-on skills
 
 ## Step 0 — Locate Portable Assets
 
-**This step runs before any mode.** The portable assets live in
-`zskills-portable/` in the Z Skills source repo. To find them:
+**This step runs before any mode.** The portable assets (hooks, scripts,
+CLAUDE_TEMPLATE.md, skills) can come from two sources: the `zskills-portable/`
+vendored directory (inside projects like Zimulink), or the Z Skills repo
+root (which has the same structure). To find them:
 
 1. Check if `zskills-portable/` exists in the current working directory. If
+   yes, use it as `$PORTABLE`.
+2. Check if `zskills/` exists in the current directory and contains
+   `CLAUDE_TEMPLATE.md`. If yes, it's a repo clone — use `zskills/` as
+   both `$PORTABLE` and `$ZSKILLS_PATH`.
+3. Check if `/tmp/zskills` exists and contains `CLAUDE_TEMPLATE.md`. If
    yes, use it.
-2. If not, check if any installed skill file (`.claude/skills/*/SKILL.md`)
-   contains a `# Source:` header line pointing to the Z Skills repo path. If
-   found, look for `zskills-portable/` relative to that path.
-3. If still not found, ask the user: "Where is the Z Skills source repo? I
-   need the path to `zskills-portable/`."
+4. **Auto-clone fallback:** Clone the repo:
+   ```bash
+   git clone https://github.com/zeveck/zskills.git /tmp/zskills
+   ```
+   If `/tmp/zskills` already exists, pull instead:
+   ```bash
+   git -C /tmp/zskills pull
+   ```
+   If the clone/pull fails (network, permissions), report the error clearly
+   and stop — do not silently continue without portable assets.
+   Tell the user:
+   > Using Z Skills repo at /tmp/zskills for portable assets.
+
+**Portable asset detection:** A valid portable source contains
+`CLAUDE_TEMPLATE.md`, `hooks/`, `scripts/`, and `skills/`. The Z Skills
+repo root has these at the top level (no `zskills-portable/` subdirectory).
+
+**If the audit finds no gaps** (all hooks, scripts, and CLAUDE.md rules
+already present — e.g., because the LLM already copied everything), the
+portable assets are not needed and Step 0 can return early.
 
 Store the resolved path as `$PORTABLE` for use in install/update modes.
+If the source is a git repo, also store it as `$ZSKILLS_PATH` for use
+in update mode.
 
 ---
 
@@ -190,7 +214,7 @@ to install." and stop.
 **If CLAUDE.md does NOT exist:**
 
 Copy `$PORTABLE/CLAUDE_TEMPLATE.md` to `CLAUDE.md`. Then **auto-detect
-placeholder values** from project files before prompting:
+placeholder values** and fill them in — do not prompt or block:
 
 1. **Scan project files** for detection signals:
    - `package.json` — `name`, `scripts.start`, `scripts.dev`, `scripts.test`,
@@ -203,24 +227,32 @@ placeholder values** from project files before prompting:
    - `pytest.ini` / `jest.config.*` / `.mocharc.*` — test framework detection
    - Git remote URL or directory name — fallback for project name
 
-2. **Present detected values for confirmation:**
+2. **Fill in values automatically.** Do not prompt. Do not block.
+   - **Detected values** → replace the placeholder directly
+   - **Undetectable values** → use sensible defaults:
+     - `{{PROJECT_NAME}}` → directory name (always available)
+     - `{{DEV_SERVER_CMD}}` → `npm start` if package.json exists,
+       otherwise comment out the section
+     - `{{UNIT_TEST_CMD}}` → `npm test` if package.json exists,
+       otherwise comment out
+     - `{{FULL_TEST_CMD}}` → same as unit test command, or comment out
+   - **Truly unknown values** → comment out with a TODO marker:
+     `<!-- TODO: fill in when known -->`
+
+3. **Report what was filled and what needs review:**
    ```
-   CLAUDE.md created from template. Detected values (confirm or override):
+   CLAUDE.md created. Values filled:
+     Project name: my-app (from package.json)
+     Dev server: npm start (detected)
+     Test command: npm test (detected)
+     Full test: commented out (no test:all script found — update when ready)
 
-     {{PROJECT_NAME}}: my-app (from package.json)
-     {{DEV_SERVER_CMD}}: npm start (from package.json scripts.start)
-     {{UNIT_TEST_CMD}}: npm test (from package.json scripts.test)
-     {{FULL_TEST_CMD}}: npm run test:all (from package.json scripts["test:all"])
-
-   Could not detect:
-     {{SOURCE_PATHS}}: [please provide, e.g., src/, lib/]
+   Review CLAUDE.md and adjust any values that need changing.
    ```
 
-3. **Only prompt for values that couldn't be detected.** For detected values,
-   the user confirms or overrides. This means install on an established
-   project requires minimal input — most values are discoverable.
-
-After confirmation, do find-and-replace for each placeholder.
+The CLAUDE.md should be functional immediately — the 13 agent rules
+work regardless of project-specific values. Unfilled placeholders should
+never leave broken `{{PLACEHOLDER}}` strings in the file.
 
 **If CLAUDE.md EXISTS but is missing rules:**
 
@@ -353,12 +385,12 @@ Run /setup-zskills audit to verify.
    `.claude/skills/`. Report which skills have upstream changes.
 
 3. **Update changed skills.** For each skill with upstream changes, copy
-   the new version to `.claude/skills/`. Show the user what changed before
-   overwriting.
+   the new version to `.claude/skills/`. Show the user what changed (file
+   names and a brief diff summary) before overwriting.
 
 4. **Update installed add-ons.** Check if any block-diagram add-on skills
    are installed (e.g., `.claude/skills/add-block/SKILL.md` exists). If so,
-   update them from `$ZSKILLS_PATH/block-diagram/` the same way.
+   diff against `$ZSKILLS_PATH/block-diagram/` and update the same way.
 
 5. **Fill new gaps.** Run the audit. For any NEW items (skills, hooks,
    scripts, CLAUDE.md rules) that don't exist yet, install them using
@@ -369,7 +401,6 @@ Run /setup-zskills audit to verify.
    Z Skills updated.
 
    Updated: N skills (list)
-   Add-ons updated: N (list)
    New: N items installed (list)
    Unchanged: N skills
 
@@ -395,3 +426,6 @@ These rules are inviolable. They apply to all three modes:
    It only reads files and produces a report.
 6. **The source of truth is `zskills-portable/`** — Step 0 describes how to
    locate it. Never hardcode paths or guess where assets live.
+7. **Do NOT use AskUserQuestion** — ask naturally in conversation text.
+   The structured prompt tool feels robotic and the options are awkward.
+   Just ask in plain English and let the user respond normally.
