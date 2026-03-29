@@ -198,7 +198,7 @@ Issues that appear already fixed (N candidates):
 |---|-------|---------|----------|
 | #126 | Fcn block mapping | FIXED | SlxImporter.js:85, commit abc1234, 2 tests |
 | #191 | Block stubs | FIXED | All 4 blocks implemented, 12 tests pass |
-| #393 | Fcn codegen u(N) | FIXED | BlockEmitter step 8, commit def5678 |
+| #393 | Fcn codegen u(N) | FIXED | codegen emitter step 8, commit def5678 |
 | #200 | Some bug | LIKELY FIXED | Code changed but no regression test |
 
 Close 3 FIXED issues? (all / comma-separated numbers / none)

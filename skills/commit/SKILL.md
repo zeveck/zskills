@@ -17,7 +17,7 @@ Commit current work without picking up or harming unrelated changes.
 - `/commit` — commit only, infer scope from diffs
 - `/commit skill updates` — commit, scope guided by "skill updates"
 - `/commit push` — commit and push to remote
-- `/commit Picazo reset button fix push` — scope-guided commit + push
+- `/commit parser reset button fix push` — scope-guided commit + push
 - `/commit land` — cherry-pick worktree commits into main (worktree only)
 
 **Parsing:** `push` and `land` are reserved keywords. Everything else in the
@@ -30,7 +30,7 @@ Examples:
 - `/commit skill updates push` → scope: "skill updates", action: commit + push
 - `/commit push` → scope: *(none)*, action: commit + push
 - `/commit land` → scope: *(none)*, action: land
-- `/commit Picazo fixes land` → scope: "Picazo fixes", action: land
+- `/commit parser fixes land` → scope: "parser fixes", action: land
 
 ## Phase 1 — Inventory
 

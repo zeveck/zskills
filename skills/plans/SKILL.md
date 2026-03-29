@@ -39,7 +39,7 @@ of ready plans (like `/fix-issues` for bugs).
    Ready to Run:
      EDITOR_GAPS_PLAN.md              9 gaps     High
      IMPORT_GAPS_PLAN.md              4 phases   Medium
-     ZPARKLINEZ.md                    5 phases   Medium
+     INLINE_CHARTS.md                 5 phases   Medium
 
    In Progress:
      FEATURE_PLAN.md                  Phase 4b   4/8 done

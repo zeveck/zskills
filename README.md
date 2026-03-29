@@ -105,7 +105,7 @@ data pipeline.
 
 ### Block Diagram Add-on (`block-diagram/`)
 
-3 additional skills for block-diagram editors. Not part of the core 17 —
+3 additional skills for block-diagram editors. Not part of the core 18 —
 install if your project involves visual block diagrams.
 See [`block-diagram/README.md`](block-diagram/README.md).
 
