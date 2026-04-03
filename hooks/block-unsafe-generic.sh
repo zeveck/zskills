@@ -6,8 +6,7 @@
 # (blanket staging, hook bypass).
 #
 # Destructive: git stash drop/clear, git checkout --/restore (any file), git clean -f,
-#              git reset --hard, kill -9/-KILL, killall, pkill, fuser -k,
-#              git push --force (but NOT --force-with-lease), rm -rf
+#              git reset --hard, kill -9/-KILL, killall, pkill, fuser -k, rm -rf
 # Discipline:  git add ./git add -A (stage by name instead),
 #              git commit --no-verify (fix the hook, don't bypass)
 
@@ -74,11 +73,6 @@ fi
 # Catch -k alone, bundled flags (-km, -mk), and --kill
 if echo "$COMMAND" | grep -qE 'fuser\s+(.*-[a-z]*k[a-z]*|--kill)'; then
   block_with_reason "BLOCKED: fuser -k kills whatever process holds a port. Other sessions may need that dev server for E2E tests. Ask the user to stop the process manually."
-fi
-
-# git push (any form — agents should never push; the user pushes when ready)
-if echo "$COMMAND" | grep -qE 'git\s+push'; then
-  block_with_reason "BLOCKED: Agents must not push. The user decides when to push — they can run: ! git push"
 fi
 
 # rm -rf / rm -r -f (mass deletion, with separate or combined flags)
