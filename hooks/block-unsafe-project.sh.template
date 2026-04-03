@@ -70,8 +70,17 @@ if echo "$COMMAND" | grep -qE '^git\s+commit'; then
   if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     FULL_TEST_CHECK="${FULL_TEST_CMD}"
     if [[ "$FULL_TEST_CHECK" == '{{FULL_TEST_CMD}}' ]]; then
-      # Placeholder not replaced -- warn but don't block
-      echo "WARNING: {{FULL_TEST_CMD}} placeholder not configured in block-unsafe-project.sh" >&2
+      # Placeholder not replaced -- warn only if project has test infrastructure
+      REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+      HAS_TESTS=false
+      if [ -f "$REPO_ROOT/package.json" ] && grep -q '"test"' "$REPO_ROOT/package.json" 2>/dev/null; then
+        HAS_TESTS=true
+      elif ls "$REPO_ROOT"/pytest.ini "$REPO_ROOT"/jest.config.* "$REPO_ROOT"/.mocharc.* "$REPO_ROOT"/Makefile 2>/dev/null | head -1 | grep -q .; then
+        HAS_TESTS=true
+      fi
+      if $HAS_TESTS; then
+        echo "WARNING: Test infrastructure detected but FULL_TEST_CMD not configured in block-unsafe-project.sh. Configure it so the pre-commit test check works." >&2
+      fi
     else
       # Check if full test command was run in this session
       if ! grep -qF "$FULL_TEST_CHECK" "$TRANSCRIPT" 2>/dev/null; then
@@ -104,7 +113,17 @@ if echo "$COMMAND" | grep -qE 'git\s+cherry-pick'; then
   if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     FULL_TEST_CHECK="${FULL_TEST_CMD}"
     if [[ "$FULL_TEST_CHECK" == '{{FULL_TEST_CMD}}' ]]; then
-      echo "WARNING: {{FULL_TEST_CMD}} placeholder not configured in block-unsafe-project.sh" >&2
+      # Placeholder not replaced -- warn only if project has test infrastructure
+      REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+      HAS_TESTS=false
+      if [ -f "$REPO_ROOT/package.json" ] && grep -q '"test"' "$REPO_ROOT/package.json" 2>/dev/null; then
+        HAS_TESTS=true
+      elif ls "$REPO_ROOT"/pytest.ini "$REPO_ROOT"/jest.config.* "$REPO_ROOT"/.mocharc.* "$REPO_ROOT"/Makefile 2>/dev/null | head -1 | grep -q .; then
+        HAS_TESTS=true
+      fi
+      if $HAS_TESTS; then
+        echo "WARNING: Test infrastructure detected but FULL_TEST_CMD not configured in block-unsafe-project.sh. Configure it so the pre-commit test check works." >&2
+      fi
     else
       if ! grep -qF "$FULL_TEST_CHECK" "$TRANSCRIPT" 2>/dev/null; then
         block_with_reason "BLOCKED: git cherry-pick but '${FULL_TEST_CHECK}' was not found in the session transcript. Run tests before landing code on main."
