@@ -22,24 +22,35 @@ workflow stages, enforcement model, and war stories.
 
 ## Quick Install
 
-Tell your LLM:
+Tell your agent:
 
-> Install the Z Skills from github.com/zeveck/zskills
+> Clone github.com/zeveck/zskills into the project and run /update-zskills
 
-It will clone the repo and copy the skills, hooks, and scripts. After
-the initial install, run `/update-zskills` to complete setup — it creates
-a CLAUDE.md with auto-detected project settings, verifies all dependencies,
-and reports any gaps.
+Or follow the steps below. This is **not** a pip/npm package — do not
+`pip install` or `npm install` it. The repo contains prompt files and
+scripts that get copied into your project.
 
-Or manually clone and tell your LLM to set up:
+### Steps
 
-```bash
-git clone https://github.com/zeveck/zskills.git zskills
-```
+1. **Clone the repo** (if not already cloned):
+   ```bash
+   git clone https://github.com/zeveck/zskills.git /tmp/zskills
+   ```
 
-Then: "Set up the Z Skills from the zskills/ directory"
+2. **Copy skills** from the clone into your project:
+   ```bash
+   mkdir -p .claude/skills
+   cp -r /tmp/zskills/skills/*/ .claude/skills/
+   ```
 
-After install, always run `/update-zskills` to verify and fill gaps.
+3. **Run `/update-zskills`** to complete setup. This is the important step —
+   it creates CLAUDE.md with auto-detected project settings, installs hooks
+   and scripts, registers hooks in settings.json, verifies dependencies,
+   and reports any gaps.
+
+That's it. `/update-zskills` handles everything beyond the initial skill copy.
+
+### Add-ons
 
 To include the block-diagram add-on (3 extra skills):
 
@@ -47,8 +58,10 @@ To include the block-diagram add-on (3 extra skills):
 /update-zskills install --with-block-diagram-addons
 ```
 
-To update later: `/update-zskills` (pulls latest and syncs, including
-any installed add-ons).
+### Updating
+
+Run `/update-zskills` anytime — it pulls the latest from the repo, updates
+changed skills, and fills any new gaps.
 
 ## Skill Catalog
 

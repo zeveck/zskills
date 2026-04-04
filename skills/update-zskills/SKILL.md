@@ -143,13 +143,13 @@ Look in `scripts/` for these 3 files:
 
 - `port.sh`
 - `test-all.sh`
-- `briefing.cjs`
+- `briefing.cjs` OR `briefing.py` (either counts — Node or Python version)
 
 ### Step 5 — Check skills with additional requirements
 
-If `/briefing` is installed, check for `briefing.cjs` in `scripts/` or
-`.claude/hooks/`. If missing, add a note: "The /briefing skill requires a
-project-specific briefing.cjs script — see /briefing skill documentation."
+If `/briefing` is installed, check for `briefing.cjs` or `briefing.py` in `scripts/`.
+If neither is found, add a note: "The /briefing skill requires briefing.cjs
+or briefing.py in scripts/ — see /briefing skill documentation."
 
 ### Step 6 — Produce the gap report
 
@@ -188,7 +188,7 @@ Tools: M/N available (K missing)
   ...
 
 Skills with additional requirements:
-  - /briefing: requires project-specific briefing.cjs (not found)
+  - /briefing: requires briefing.cjs or briefing.py in scripts/ (not found)
   ...
 
 Overall: X/Y dependencies satisfied.
@@ -383,7 +383,7 @@ Installed:
 - Add-ons: N add-on skills installed (omit this line if no add-on flag was used)
 
 Skills with additional requirements:
-- /briefing: requires project-specific briefing.cjs (see /briefing skill docs)
+- /briefing: requires briefing.cjs or briefing.py in scripts/ (see /briefing skill docs)
 
 Run /update-zskills to check for updates later.
 ```
