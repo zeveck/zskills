@@ -10,6 +10,7 @@
 #              git reset --hard, kill -9/-KILL, killall, pkill, fuser -k, rm -rf
 # Discipline:  git add ./git add -A (stage by name instead),
 #              git commit --no-verify (fix the hook, don't bypass)
+# Optional:    git push (agents should not push; the user pushes when ready)
 
 INPUT=$(</dev/stdin)
 
@@ -66,13 +67,23 @@ if [[ "$INPUT" =~ rm[[:space:]]+(-[a-zA-Z]*r[a-zA-Z]*f|(-r[[:space:]]+-f|-f[[:sp
 fi
 
 # git add . / git add -A / git add --all (sweeps in unrelated changes)
-if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.([[:space:]]|$)) ]]; then
+# Note: in raw JSON, "git add ." appears as ...git add ."... so we also match \."
+if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.[[:space:]\"\|]) ]] || [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+\.$ ]]; then
   block_with_reason "BLOCKED: git add . / git add -A sweeps in ALL changes, including other sessions' work. Stage files by name: git add file1 file2."
 fi
 
 # git commit --no-verify (skips pre-commit hooks)
 if [[ "$INPUT" =~ git[[:space:]]+commit[[:space:]]+.*--no-verify ]]; then
   block_with_reason "BLOCKED: --no-verify skips pre-commit hooks. Hooks exist for safety — fix the hook failure, don't bypass it."
+fi
+
+# ─── OPTIONAL: git push blocking ────────────────────────────────────
+# Uncomment the block below to prevent agents from pushing.
+# The user decides when to push — they can run: ! git push
+# /update-zskills install asks whether to enable this.
+
+if [[ "$INPUT" =~ git[[:space:]]+push ]]; then
+  block_with_reason "BLOCKED: Agents must not push. The user decides when to push — they can run: ! git push"
 fi
 
 # No match — allow

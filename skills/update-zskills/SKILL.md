@@ -299,6 +299,23 @@ Copy missing hooks from `$PORTABLE/hooks/` to `.claude/hooks/`.
 >   test output (must capture to file), verifies tests ran before commit,
 >   and optionally checks for UI verification before committing UI changes
 
+**Ask about git push blocking:**
+
+> block-unsafe-generic.sh has an optional git push block. When enabled,
+> agents cannot push to remote — you push when ready (using `! git push`).
+> This prevents accidental pushes of incomplete work.
+>
+> Enable git push blocking? (recommended for shared repos)
+
+If the user says yes (or in `auto` mode — default to enabled), uncomment
+the push blocking section in `.claude/hooks/block-unsafe-generic.sh`:
+```bash
+if [[ "$INPUT" =~ git[[:space:]]+push ]]; then
+  block_with_reason "BLOCKED: Agents must not push. The user decides when to push — they can run: ! git push"
+fi
+```
+If the user says no, leave it commented out.
+
 Then register the hooks in `.claude/settings.json`. The format is:
 
 ```json
