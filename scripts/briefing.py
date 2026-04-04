@@ -1473,13 +1473,17 @@ def main():
         repo_root = find_repo_root()
         main_path = re.sub(r'/\.claude/worktrees/[^/]+$', '', repo_root)
         reports_dir = os.path.join(main_path, 'reports')
-        os.makedirs(reports_dir, exist_ok=True)
         wts = classify_worktrees()
         cbs = scan_checkboxes()
         commits = parse_commits(since=since_git)
         content = format_report(wts, cbs, commits, {'since': since_git})
         content = preserve_checkboxes(content, reports_dir)
-        file_path = output_path or generate_report_path(reports_dir)
+        if output_path:
+            file_path = output_path
+            os.makedirs(os.path.dirname(file_path) or '.', exist_ok=True)
+        else:
+            os.makedirs(reports_dir, exist_ok=True)
+            file_path = generate_report_path(reports_dir)
         with open(file_path, 'w') as f:
             f.write(content)
         print(f'Report written to: {file_path}')

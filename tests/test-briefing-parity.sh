@@ -41,10 +41,15 @@ if [[ "$HAS_PYTHON" == "false" ]]; then
   exit 0
 fi
 
+# Use a temp directory for report output to avoid polluting the repo
+TEST_TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TEST_TMPDIR"' EXIT
+
 # Smoke test all subcommands with python3
+# Note: "report" writes files, so redirect its output to the temp dir
 smoke_cmds=(
   "summary"
-  "report --since=24h"
+  "report --since=24h --output=$TEST_TMPDIR/briefing-test.md"
   "verify"
   "current"
   "worktrees"
