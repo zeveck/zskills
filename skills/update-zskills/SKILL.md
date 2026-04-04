@@ -1,7 +1,6 @@
 ---
 name: update-zskills
 description: Install or update Z Skills supporting infrastructure (CLAUDE.md rules, hooks, scripts)
-disable-model-invocation: true
 ---
 
 # Update Z Skills Infrastructure
