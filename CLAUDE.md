@@ -8,7 +8,7 @@ Skill distribution repo and presentation site for Z Skills.
 - `block-diagram/` — add-on skills (3)
 - `.claude/skills/` — installed skill copies (what Claude Code reads)
 - `hooks/` — source hook scripts
-- `scripts/` — helper scripts (port.js, test-all.js, briefing.cjs)
+- `scripts/` — helper scripts (port.sh, test-all.sh, briefing.py; .js originals kept for backward compat)
 - `CLAUDE_TEMPLATE.md` — template for CLAUDE.md generation in target projects
 - `PRESENTATION.html` — main site (index.html redirects here)
 - `README.md`, `CHANGELOG.md` — documentation

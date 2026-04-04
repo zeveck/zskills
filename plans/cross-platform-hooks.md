@@ -147,7 +147,7 @@ a test harness that runs both `node scripts/briefing.cjs <cmd>` and
    use `.sh` version.
 
 ### Phase 5 — Tests
-**Status:** not started
+**Status:** done
 **Files:** `tests/` (new directory)
 
 1. **Hook tests:** Sample JSON inputs for each blocked pattern. Verify deny
