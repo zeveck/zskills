@@ -1,3 +1,4 @@
 .claude/settings.local.json
 .claude/skills/social-seo/
 __pycache__/
+.claude/tracking/
