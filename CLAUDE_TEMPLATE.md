@@ -127,3 +127,7 @@ A commit must include **all files the feature needs** and **no unrelated files**
 URLs, or creating files from scratch, check what already exists: `ls` the
 directory, `grep` for the term, read the relevant file. Agents consistently
 skip this step and guess instead of looking.
+
+## Tracking Enforcement
+
+Tracking file enforcement is active when `.claude/tracking/` exists. Skills create tracking files during pipeline execution; hooks check them before allowing commits. See the tracking enforcement section in `block-unsafe-project.sh` for details. The `clear-tracking.sh` script in `scripts/` lets the user manually clear stale tracking state -- agents are blocked from running it directly.
