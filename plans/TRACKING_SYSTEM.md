@@ -1,7 +1,7 @@
 ---
 title: Skill Tracking System — Mechanical Enforcement of Skill Invocations and Step Completion
 created: 2026-04-05
-status: active
+status: complete
 ---
 
 # Plan: Skill Tracking System — Mechanical Enforcement of Skill Invocations and Step Completion
@@ -24,7 +24,7 @@ This plan implements a tracking file system in `.claude/tracking/` where skills 
 | 2 — Pipeline Orchestration Skills | ✅ Done | `980957f` | research-and-go, research-and-plan delegation markers |
 | 3 — Execution Skills | ✅ Done | `c65be09` | run-plan, draft-plan, verify-changes fulfillment + step markers |
 | 4 — Dispatch Skills | ✅ Done | `2b76e5c` | fix-issues, add-block, add-example step markers |
-| 5 — Tests & Integration | ⬚ | | test-hooks.sh, /update-zskills awareness |
+| 5 — Tests & Integration | ✅ Done | `7e31b1e` | /update-zskills awareness, CLAUDE_TEMPLATE.md docs |
 
 ## Tracking System Design
 
