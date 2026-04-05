@@ -123,6 +123,181 @@ else
 fi
 
 echo ""
+
+# ─── Project hook test harness ───
+PROJECT_HOOK="hooks/block-unsafe-project.sh.template"
+TEST_TMPDIR=""
+
+setup_project_test() {
+  TEST_TMPDIR=$(mktemp -d)
+  mkdir -p "$TEST_TMPDIR/.claude/hooks"
+  mkdir -p "$TEST_TMPDIR/.claude/tracking"
+
+  # Copy and configure the hook template
+  cp "$PROJECT_HOOK" "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh"
+  sed -i 's|{{UNIT_TEST_CMD}}|npm test|g' "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh"
+  sed -i 's|{{FULL_TEST_CMD}}|npm run test:all|g' "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh"
+  sed -i 's|{{UI_FILE_PATTERNS}}|src/ui/|g' "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh"
+
+  # Create mock package.json with test script
+  printf '{"scripts":{"test":"vitest","test:all":"vitest run"}}\n' > "$TEST_TMPDIR/package.json"
+
+  # Create mock transcript with test command
+  printf 'npm run test:all\n' > "$TEST_TMPDIR/.transcript"
+
+  # Initialize git repo (needed for git diff --cached, etc.)
+  (cd "$TEST_TMPDIR" && git init -q && git add -A && git commit -q -m "init" 2>/dev/null)
+}
+
+teardown_project_test() {
+  [ -n "$TEST_TMPDIR" ] && rm -rf "$TEST_TMPDIR"
+  TEST_TMPDIR=""
+}
+
+expect_project_deny() {
+  local cmd="$1"
+  local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"},\"transcript_path\":\"$TEST_TMPDIR/.transcript\"}"
+  local result
+  result=$(echo "$json" | REPO_ROOT="$TEST_TMPDIR" bash "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh" 2>/dev/null)
+  if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
+    pass "$cmd → denied (expected)"
+  else
+    fail "$cmd → allowed (expected deny)"
+  fi
+}
+
+expect_project_allow() {
+  local cmd="$1"
+  local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"},\"transcript_path\":\"$TEST_TMPDIR/.transcript\"}"
+  local result
+  result=$(echo "$json" | REPO_ROOT="$TEST_TMPDIR" bash "$TEST_TMPDIR/.claude/hooks/block-unsafe-project.sh" 2>/dev/null)
+  if [[ -z "$result" ]] || [[ "$result" != *"deny"* ]]; then
+    pass "$cmd → allowed (expected)"
+  else
+    fail "$cmd → denied (expected allow)"
+  fi
+}
+
+echo "=== Project hook: tracking file protection ==="
+
+setup_project_test
+
+# Block recursive rm of tracking directory
+expect_project_deny "rm -rf .claude/tracking"
+expect_project_deny "rm -r .claude/tracking"
+expect_project_deny "rm -fr .claude/tracking"
+
+# Allow individual file deletion within tracking directory
+expect_project_allow "rm .claude/tracking/requires.foo"
+expect_project_allow "rm -f .claude/tracking/pipeline.active"
+
+# Block execution of clear-tracking script
+expect_project_deny "bash scripts/clear-tracking.sh"
+expect_project_deny "sh scripts/clear-tracking.sh"
+expect_project_deny "./scripts/clear-tracking.sh"
+
+# Allow reading clear-tracking script
+expect_project_allow "cat scripts/clear-tracking.sh"
+expect_project_allow "grep -n confirm scripts/clear-tracking.sh"
+
+teardown_project_test
+
+echo ""
+echo "=== Project hook: delegation enforcement ==="
+
+# Test: requires.X without fulfilled.X blocks git commit
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+# Stage a code file so it's not content-only
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_deny "git commit -m test"
+teardown_project_test
+
+# Test: requires.X with fulfilled.X allows git commit
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+touch "$TEST_TMPDIR/.claude/tracking/fulfilled.verify-changes"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+# Test: delegation blocks git cherry-pick too
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+expect_project_deny "git cherry-pick abc123"
+teardown_project_test
+
+echo ""
+echo "=== Project hook: step enforcement ==="
+
+# Test: step.X.implement without step.X.verify blocks
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.implement"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_deny "git commit -m test"
+teardown_project_test
+
+# Test: step.X.implement with step.X.verify but no step.X.report blocks
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.implement"
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.verify"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_deny "git commit -m test"
+teardown_project_test
+
+# Test: step.X.implement + step.X.verify + step.X.report allows
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.implement"
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.verify"
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.report"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+# Test: phasestep.* markers are ignored (not enforced)
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/phasestep.phase1.implement"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+# Test: step enforcement on cherry-pick
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/step.phase1.implement"
+expect_project_deny "git cherry-pick abc123"
+teardown_project_test
+
+echo ""
+echo "=== Project hook: staleness protection ==="
+
+# Test: stale pipeline.active (>8h) allows commit despite requires.*
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+touch "$TEST_TMPDIR/.claude/tracking/pipeline.active"
+# Make pipeline.active look old (>8h = 480min)
+touch -t 202501010000 "$TEST_TMPDIR/.claude/tracking/pipeline.active"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+echo ""
+echo "=== Project hook: backward compatibility ==="
+
+# Test: no tracking dir → silently passes
+setup_project_test
+rmdir "$TEST_TMPDIR/.claude/tracking"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+# Test: content-only commits bypass tracking enforcement
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+(cd "$TEST_TMPDIR" && echo "content" > readme.md && git add readme.md)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+echo ""
 echo "---"
 printf 'Results: %d passed, %d failed (of %d)\n' "$PASS_COUNT" "$FAIL_COUNT" "$((PASS_COUNT + FAIL_COUNT))"
 
