@@ -270,7 +270,16 @@ and drafts plans for all found issues.
    Wait for the user's selection before proceeding. If `auto`, skip this
    step and plan all of them.
 
-4. **For each selected issue**, dispatch `/draft-plan` with:
+4. **For each selected issue**, create a delegation requirement marker and
+   then dispatch `/draft-plan`:
+   ```bash
+   MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+   mkdir -p "$MAIN_ROOT/.claude/tracking"
+   printf 'skill: draft-plan\nparent: fix-issues\nissue: %s\ndate: %s\n' \
+     "$ISSUE_NUMBER" "$(TZ=America/New_York date -Iseconds)" \
+     > "$MAIN_ROOT/.claude/tracking/requires.draft-plan.$ISSUE_NUMBER"
+   ```
+   Then dispatch `/draft-plan` with:
    - The issue number and full body (`gh issue view <N> --json body`)
    - Any research blurb from the tracker files
    - Output path: `plans/{issue-slug}.md`
@@ -356,6 +365,20 @@ If `every` is NOT present, skip this phase entirely and proceed to Phase 1
 skip tracker updates or research to "save time." Dispatching agents without
 research blurbs causes misinterpretation — agents guess from titles and
 implement the wrong fix. This has happened repeatedly.
+
+### Sprint tracking sentinel
+
+When mode is sprint (N provided), create the pipeline sentinel before
+doing anything else:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+mkdir -p "$MAIN_ROOT/.claude/tracking"
+if [ ! -f "$MAIN_ROOT/.claude/tracking/pipeline.active" ]; then
+  printf 'skill: fix-issues\nmode: sprint\ncount: %s\nfocus: %s\nstartedAt: %s\n' \
+    "$N" "${FOCUS:-default}" "$(TZ=America/New_York date -Iseconds)" \
+    > "$MAIN_ROOT/.claude/tracking/pipeline.active"
+fi
+```
 
 ### Preflight checks (before doing anything else)
 
@@ -463,6 +486,15 @@ For each candidate, note:
 - Suggested fix approach (from plan blurb)
 - Context metadata (model name, browser, screen size)
 
+### Post-preflight tracking
+
+After Phase 1 (preflight + sync + research) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.preflight"
+```
+
 ## Phase 2 — Prioritize
 
 Present the next N issues to fix as a ranked table:
@@ -562,6 +594,15 @@ If ALL candidates are too vague, too complex, or already attempted:
      are expected." Do NOT auto-stop — that's the user's call.
    - **Exit.** Skip Phases 3-6.
 
+### Post-prioritize tracking
+
+After Phase 2 (prioritize) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\nissueCount: %d\n' "$(TZ=America/New_York date -Iseconds)" "$ISSUE_COUNT" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.prioritize"
+```
+
 ## Phase 3 — Execute (agent teams in worktrees)
 
 **1 issue per agent, parallel dispatch.** Each issue gets its own agent
@@ -632,7 +673,27 @@ Each agent follows this fix workflow:
 Agents commit freely in worktrees — that's the point of isolation. Worktree
 commits are safe and expected. The approval gate is landing to main (Phase 6).
 
+### Post-execute tracking
+
+After Phase 3 (execute) is complete — all agents have returned:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.execute"
+```
+
 ## Phase 4 — Review
+
+### Pre-verification tracking
+
+Before dispatching verification agents, create a delegation requirement
+marker so the hook can enforce that verification actually runs:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'skill: verify-changes\nparent: fix-issues\nmode: sprint\ndate: %s\n' \
+  "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/requires.verify-changes.sprint"
+```
 
 After each agent completes, **dispatch a fresh agent** to run `/verify-changes
 worktree` in its worktree. Do NOT run verification yourself — you wrote
@@ -643,6 +704,15 @@ This delegates the full review workflow (diff review, test coverage audit,
 test run, manual verification, fix & re-verify cycle) to a separate agent.
 
 Report the review results to the user.
+
+### Post-verify tracking
+
+After Phase 4 (verify) is complete — all verification agents have returned:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.verify"
+```
 
 ## Phase 5 — Write Sprint Report (BEFORE landing)
 
@@ -705,6 +775,15 @@ The file starts with `# Sprint Report` (created once). Each sprint
 appends a new `## Sprint` section. `/fix-report` marks sections
 `[FINALIZED]` after review. **Use actual data** — real issue numbers,
 commit hashes, worktree paths, and test counts.
+
+### Post-report tracking
+
+After Phase 5 (report) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.report"
+```
 
 ## Phase 6 — Land
 
@@ -845,6 +924,15 @@ commit hashes, worktree paths, and test counts.
 
   11. Done. Closing GH issues and updating trackers are still `/fix-report`
       actions — even in auto mode.
+
+### Post-land tracking
+
+After Phase 6 (land) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.fix-issues.sprint.land"
+```
 
 ## Failure Protocol
 

@@ -345,9 +345,32 @@ npm run test:all
 
 All existing tests must continue to pass (unit, E2E, and codegen suites).
 
+### Post-tests tracking
+
+After Step 6 tests pass:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+mkdir -p "$MAIN_ROOT/.claude/tracking"
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.tests"
+```
+
+In batch mode, each block gets its own tracking marker keyed by BlockName.
+
 ---
 
 ## Step 7 — Example Model
+
+### Pre-example delegation
+
+Before invoking `/add-example`, create a delegation requirement marker:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+mkdir -p "$MAIN_ROOT/.claude/tracking"
+printf 'skill: add-example\nparent: add-block\nblock: %s\ndate: %s\n' \
+  "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/requires.add-example.${BLOCK_NAME}"
+```
 
 Use the `/add-example` skill to create an example model for this block
 (or the batch of blocks). Pass all block types from this batch:
@@ -363,6 +386,23 @@ all the blocks together is better than N separate trivial models.
 The `/add-example` skill handles: model file construction with exact port
 alignment, registration in block-explorer-data.js, codegen compile tests,
 unit tests with value assertions, browser verification, and screenshots.
+
+### Post-example tracking
+
+After `/add-example` completes:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.example"
+```
+
+If the example was deferred (batch mode, will be done later), create the
+deferred marker instead with the reason:
+```bash
+printf 'block: %s\ndeferred: true\nreason: batch mode — example deferred until all blocks implemented\ndate: %s\n' \
+  "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.example-deferred"
+```
 
 ---
 
@@ -432,6 +472,15 @@ Test the emitter by running `npm run test:all` — codegen tests exercise
 all registered emitters. The example model's codegen compile test is
 handled by `/add-example` (Step 7), not here.
 
+### Post-codegen tracking
+
+After codegen is implemented:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.codegen"
+```
+
 ### If Rust codegen cannot be implemented now
 
 Create a GitHub issue and add an entry to `plans/BUILD_ISSUES.md` following the existing format. Check the file first to find the highest R-number and increment it.
@@ -447,6 +496,14 @@ Create a GitHub issue and add an entry to `plans/BUILD_ISSUES.md` following the 
 | **Status** | OPEN |
 
 **Description:** {Why this block can't be emitted yet and what's needed.}
+```
+
+After deferring codegen, create the deferred marker with the GitHub issue number:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ndeferred: true\nissue: #%s\ndate: %s\n' \
+  "$BLOCK_NAME" "$ISSUE_NUMBER" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.codegen-deferred"
 ```
 
 ---
@@ -470,6 +527,15 @@ Use the `/manual-testing` skill with `playwright-cli` to verify the block works 
 - Simulation produces expected output values
 - Each parameter independently affects behavior as documented in the plan
 - No console errors during any of the above
+
+### Post-manual-test tracking
+
+After Step 9 manual testing completes:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.manual-test"
+```
 
 ---
 
@@ -524,6 +590,27 @@ index of all new-blocks reports (same pattern as PLAN_REPORT.md).
 Before reporting completion or dispatching verification, run these checks
 for EACH block added. Fix any failures — do not "note" them as gaps.
 
+### Tracking file gate
+
+Before running the self-audit checklist, verify tracking files exist for
+critical steps. If any are missing, go back and complete the step:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+# All four must exist (or their -deferred variant)
+for marker in tests example codegen manual-test; do
+  if [ ! -f "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.${marker}" ] && \
+     [ ! -f "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.${marker}-deferred" ]; then
+    echo "MISSING: step.add-block.${BLOCK_NAME}.${marker} — go back and complete this step"
+  fi
+done
+```
+
+If any markers are missing, **stop the self-audit and complete the missing
+steps first.** Only proceed when all four markers (or their `-deferred`
+variants) exist.
+
+### Self-audit checklist
+
 ```bash
 # 1. Block registered?
 grep "type: 'BlockType'" src/library/block-registry.js
@@ -559,9 +646,28 @@ has an OR), go back and complete the missing step. Past failure: Block
 Expansion Phase 1 skipped Steps 7, 9, and 12 — verifier accepted "gaps
 noted" instead of failing. These checks prevent that.
 
+### Post-self-audit tracking
+
+After the self-audit checklist passes:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.self-audit"
+```
+
 ---
 
 ## Step 11 — Verification (separate agent)
+
+### Pre-verification delegation
+
+Before dispatching the verification agent, create a delegation requirement:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'skill: verify-changes\nparent: add-block\nblock: %s\ndate: %s\n' \
+  "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/requires.verify-changes.${BLOCK_NAME}"
+```
 
 Dispatch a **fresh verification agent** targeting the worktree. The agent
 that implemented the blocks must NOT verify them.
@@ -582,6 +688,15 @@ The verifier checks:
 **Agent timeout: 45 minutes.** If exceeded, declare failed.
 
 If verification fails: dispatch a fix agent (max 2 fix+verify rounds).
+
+### Post-verification tracking
+
+After verification completes:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'block: %s\ncompleted: %s\n' "$BLOCK_NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-block.${BLOCK_NAME}.verify"
+```
 
 ---
 

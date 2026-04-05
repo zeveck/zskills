@@ -19,6 +19,21 @@ verification, distilled from real mistakes.
 
 ---
 
+## Fulfillment Tracking
+
+On entry, create the fulfillment marker so the parent skill (e.g.,
+`/add-block`) knows this delegation was accepted:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+mkdir -p "$MAIN_ROOT/.claude/tracking"
+printf 'skill: add-example\nname: %s\nstatus: started\ndate: %s\n' \
+  "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/fulfilled.add-example.${NAME}"
+```
+
+Where `$NAME` is derived from the block type(s) or model name (e.g.,
+`Gain`, `math-batch`).
+
 ## Before You Start
 
 ```bash
@@ -129,6 +144,15 @@ Create `examples/<name>/README.md`:
 mkdir -p examples/<name>/screenshots
 ```
 
+### Post-build tracking
+
+After Phase 2 (build) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'name: %s\ncompleted: %s\n' "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-example.${NAME}.build"
+```
+
 ---
 
 ## Phase 3 — Register
@@ -160,6 +184,15 @@ In `tests/codegen-compile.test.js`, add the model to the appropriate tier:
 { name: 'model-name', tol: 1e-6, maxMismatch: 0.05 },
 ```
 
+### Post-register tracking
+
+After Phase 3 (register) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'name: %s\ncompleted: %s\n' "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-example.${NAME}.register"
+```
+
 ---
 
 ## Phase 4 — Verify
@@ -182,6 +215,15 @@ Use `playwright-cli` to:
 playwright-cli screenshot
 # Then rename to something descriptive:
 mv .playwright/output/screenshot-*.png examples/<name>/screenshots/01-model-with-results.png
+```
+
+### Post-screenshot tracking
+
+After Phase 4b (screenshot) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'name: %s\ncompleted: %s\n' "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-example.${NAME}.screenshot"
 ```
 
 ### 4c. Write unit tests
@@ -208,6 +250,15 @@ npm run test:all
 
 All 3 suites must pass (unit, e2e, codegen). Report each suite's result.
 
+### Post-tests tracking
+
+After Phase 4c/4d (tests pass):
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'name: %s\ncompleted: %s\n' "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-example.${NAME}.tests"
+```
+
 ---
 
 ## Phase 5 — Final Check
@@ -222,6 +273,22 @@ Send a verification agent (or do it yourself) to check:
 - Block's `examples` array references the model key
 - Codegen compile test entry is present
 - Unit test verifies output values, not just completion
+
+### Post-verify tracking
+
+After Phase 5a (verification) is complete:
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+printf 'name: %s\ncompleted: %s\n' "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/step.add-example.${NAME}.verify"
+```
+
+Update the fulfillment marker to reflect completion:
+```bash
+printf 'skill: add-example\nname: %s\nstatus: completed\ndate: %s\n' \
+  "$NAME" "$(TZ=America/New_York date -Iseconds)" \
+  > "$MAIN_ROOT/.claude/tracking/fulfilled.add-example.${NAME}"
+```
 
 ### 5b. Retake screenshot if needed
 
