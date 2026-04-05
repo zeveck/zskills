@@ -16,6 +16,7 @@ Usage:
   python3 scripts/briefing.py worktrees-status   — Detailed worktree cleanup report
 """
 
+import glob
 import json
 import math
 import os
@@ -490,6 +491,109 @@ def scan_checkboxes_in_files(files):
                     })
         except Exception:
             pass
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# scanPlans
+# ---------------------------------------------------------------------------
+
+def scan_plans(repo_root=None):
+    """Scan plans/*.md for completion status and missing reports."""
+    repo_root = repo_root or find_repo_root()
+    main_path = re.sub(r'/\.claude/worktrees/[^/]+$', '', repo_root)
+    plans_dir = os.path.join(main_path, 'plans')
+    reports_dir = os.path.join(main_path, 'reports')
+
+    plan_files = sorted(glob.glob(os.path.join(plans_dir, '*.md')))
+    results = []
+
+    for plan_file in plan_files:
+        try:
+            with open(plan_file, 'r') as f:
+                content = f.read()
+        except Exception:
+            continue
+
+        lines = content.split('\n')
+
+        # --- Extract metadata from YAML frontmatter (first 20 lines) ---
+        title = ''
+        issue = ''
+        status = ''
+        created = ''
+        in_frontmatter = False
+        frontmatter_ended = False
+
+        for line in lines[:20]:
+            stripped = line.strip()
+            if stripped == '---' and not in_frontmatter and not frontmatter_ended:
+                in_frontmatter = True
+                continue
+            if stripped == '---' and in_frontmatter:
+                frontmatter_ended = True
+                in_frontmatter = False
+                continue
+            if in_frontmatter:
+                m = re.match(r'^(\w+):\s*(.+)', stripped)
+                if m:
+                    key, val = m.group(1).lower(), m.group(2).strip().strip('"').strip("'")
+                    if key == 'issue':
+                        issue = val
+                    elif key == 'title':
+                        title = val
+                    elif key == 'status':
+                        status = val
+                    elif key == 'created':
+                        created = val
+
+        # --- Fallback: extract title/issue from first heading ---
+        if not title:
+            for line in lines[:5]:
+                heading_match = re.match(r'^#\s+(.+)', line)
+                if heading_match:
+                    raw = heading_match.group(1).strip()
+                    issue_match = re.search(r'\(#(\d+)\)', raw)
+                    if issue_match:
+                        if not issue:
+                            issue = issue_match.group(1)
+                        title = re.sub(r'\s*\(#\d+\)\s*', '', raw).strip()
+                    else:
+                        title = raw
+                    break
+
+        if not title:
+            title = os.path.splitext(os.path.basename(plan_file))[0]
+
+        # --- Scan for phase status indicators ---
+        phase_statuses = []
+        status_re = re.compile(r'\*\*Status:\*\*\s*(.+)', re.IGNORECASE)
+        for line in lines:
+            sm = status_re.search(line)
+            if sm:
+                phase_statuses.append(sm.group(1).strip().lower())
+
+        all_phases_done = (
+            len(phase_statuses) > 0
+            and all(s == 'done' for s in phase_statuses)
+        )
+
+        # --- Check for corresponding report ---
+        slug = os.path.splitext(os.path.basename(plan_file))[0]
+        report_path = os.path.join(reports_dir, f'plan-{slug}.md')
+        has_report = os.path.exists(report_path)
+
+        results.append({
+            'file': plan_file,
+            'title': title,
+            'issue': issue,
+            'status': status,
+            'created': created,
+            'all_phases_done': all_phases_done,
+            'has_report': has_report,
+            'phase_count': len(phase_statuses),
+        })
 
     return results
 
@@ -1464,9 +1568,21 @@ def main():
         cbs = scan_checkboxes()
         commits = parse_commits(since=since_git)
         staleness_warnings = check_staleness(wts)
+        plan_findings = scan_plans()
+        plan_warnings = []
+        for pf in plan_findings:
+            if pf['all_phases_done']:
+                t = pf['title']
+                if pf['status'] and pf['status'].lower() == 'active':
+                    plan_warnings.append(f"Plan {t} appears complete but status is still 'active'")
+                if not pf['has_report']:
+                    plan_warnings.append(f'Plan {t} complete but no report in reports/')
+                if pf['issue']:
+                    plan_warnings.append(f"Plan {t} complete — issue #{pf['issue']} may need closing (run /briefing verify or check manually)")
+        all_warnings = staleness_warnings + plan_warnings
         output = format_summary(wts, cbs, commits, {'since': since or '24h'})
-        if staleness_warnings:
-            output += '\n\nWARNINGS\n' + '\n'.join(f'  ! {w}' for w in staleness_warnings)
+        if all_warnings:
+            output += '\n\nWARNINGS\n' + '\n'.join(f'  ! {w}' for w in all_warnings)
         print(output)
 
     elif subcommand == 'report':

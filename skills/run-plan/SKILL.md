@@ -663,6 +663,82 @@ of all plan reports:
   a phantom checkbox. Describe instead: "bracket pair" or use backtick
   escaping.
 
+## Phase 5b — Plan Completion
+
+Triggers when ALL phases are done: either the last phase just finished
+(single-phase run where it was the only remaining phase), or in `finish`
+mode after all phases complete. Run this BEFORE Phase 6 (Land).
+
+### 1. Audit phase compliance
+
+Before declaring the plan complete, verify every phase has a clean status:
+
+1. **Check completion indicators** — every phase must have one of: Done,
+   a commit hash, ✅, `[x]`. If any phase lacks a completion indicator,
+   WARN (do not hard-block):
+   > Phase 3 has no completion indicator — review before closing.
+
+2. **Scan for unresolved gaps** — check each phase's status line AND its
+   corresponding section in `reports/plan-{slug}.md` for any of these
+   phrases (case-insensitive): "noted as gap", "deferred", "skipped",
+   "future work". If found, WARN (do not hard-block):
+   > Phase 3 has unresolved gaps — review before closing.
+
+   List all flagged phases together so the user can review in one pass.
+
+3. If running with `auto` and warnings were emitted, log them in the
+   report but continue — these are advisory, not blocking.
+
+### 2. Close linked issue (if any)
+
+If the plan file has YAML frontmatter with an `issue:` field (e.g.,
+`issue: 42` or `issue: "#42"`):
+
+1. **Check issue state:**
+   ```bash
+   gh issue view <N> --json state --jq '.state'
+   ```
+
+2. **If open:** close it with a summary comment listing key commits and
+   what was accomplished:
+   ```bash
+   gh issue close <N> --comment "Resolved via plan execution.
+
+   Plan: <plan-file>
+   Key commits: <comma-separated list of commit hashes from all phases>
+   Phases completed: <count>
+
+   All phases passed verification. See reports/plan-{slug}.md for details."
+   ```
+
+3. **If already closed:** no action needed — log "Issue #N already closed."
+
+4. **If no `issue:` field:** skip this step entirely.
+
+### 3. Update plan frontmatter
+
+Change `status: active` (or `status: in-progress`) to `status: complete`
+in the plan file's YAML frontmatter. If the plan has no `status:` field,
+add one: `status: complete`. Commit the change:
+```bash
+git add <plan-file>
+git commit -m "chore: mark plan complete — <plan-name>"
+```
+
+### 4. Update SPRINT_REPORT.md
+
+Check if `SPRINT_REPORT.md` exists in the repo root. If it does:
+
+1. Search for the closed issue number (from step 2) or the plan filename
+   in a "Skipped" section (look for headers or list items containing
+   "Skipped", "Too Complex", "Deferred", or "Punted").
+
+2. If found, append a note to that entry:
+   > Resolved via /run-plan (plan: <plan-file>)
+
+3. If `SPRINT_REPORT.md` does not exist, or the issue/plan is not
+   mentioned in a skipped section, skip this step.
+
 ## Phase 6 — Land
 
 ### Delegate mode landing

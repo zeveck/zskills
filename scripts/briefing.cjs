@@ -1182,6 +1182,134 @@ function formatCurrent(worktrees, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// scanPlans — check plans/*.md for completion status and missing reports
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan plans/*.md for completion status and missing reports.
+ * @param {string} [repoRoot]
+ * @returns {Array<{file: string, title: string, issue: string, status: string, created: string, all_phases_done: boolean, has_report: boolean, phase_count: number}>}
+ */
+function scanPlans(repoRoot) {
+  repoRoot = repoRoot || findRepoRoot();
+  const mainPath = repoRoot.replace(/\/.claude\/worktrees\/[^/]+$/, '');
+  const plansDir = path.join(mainPath, 'plans');
+  const reportsDir = path.join(mainPath, 'reports');
+
+  if (!fs.existsSync(plansDir)) return [];
+
+  let planFiles;
+  try {
+    planFiles = fs.readdirSync(plansDir)
+      .filter(f => f.endsWith('.md'))
+      .sort()
+      .map(f => path.join(plansDir, f));
+  } catch {
+    return [];
+  }
+
+  const results = [];
+
+  for (const planFile of planFiles) {
+    let content;
+    try {
+      content = fs.readFileSync(planFile, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const lines = content.split('\n');
+
+    // --- Extract metadata from YAML frontmatter (first 20 lines) ---
+    let title = '';
+    let issue = '';
+    let status = '';
+    let created = '';
+    let inFrontmatter = false;
+    let frontmatterEnded = false;
+
+    for (const line of lines.slice(0, 20)) {
+      const stripped = line.trim();
+      if (stripped === '---' && !inFrontmatter && !frontmatterEnded) {
+        inFrontmatter = true;
+        continue;
+      }
+      if (stripped === '---' && inFrontmatter) {
+        frontmatterEnded = true;
+        inFrontmatter = false;
+        continue;
+      }
+      if (inFrontmatter) {
+        const m = stripped.match(/^(\w+):\s*(.+)/);
+        if (m) {
+          const key = m[1].toLowerCase();
+          const val = m[2].trim().replace(/^["']|["']$/g, '');
+          if (key === 'issue') issue = val;
+          else if (key === 'title') title = val;
+          else if (key === 'status') status = val;
+          else if (key === 'created') created = val;
+        }
+      }
+    }
+
+    // --- Fallback: extract title/issue from first heading ---
+    if (!title) {
+      for (const line of lines.slice(0, 5)) {
+        const headingMatch = line.match(/^#\s+(.+)/);
+        if (headingMatch) {
+          const raw = headingMatch[1].trim();
+          const issueMatch = raw.match(/\(#(\d+)\)/);
+          if (issueMatch) {
+            if (!issue) issue = issueMatch[1];
+            title = raw.replace(/\s*\(#\d+\)\s*/g, '').trim();
+          } else {
+            title = raw;
+          }
+          break;
+        }
+      }
+    }
+
+    if (!title) {
+      title = path.basename(planFile, '.md');
+    }
+
+    // --- Scan for phase status indicators ---
+    const phaseStatuses = [];
+    const statusRe = /\*\*Status:\*\*\s*(.+)/i;
+    for (const line of lines) {
+      const sm = statusRe.exec(line);
+      if (sm) {
+        phaseStatuses.push(sm[1].trim().toLowerCase());
+      }
+    }
+
+    const allPhasesDone = (
+      phaseStatuses.length > 0 &&
+      phaseStatuses.every(s => s === 'done')
+    );
+
+    // --- Check for corresponding report ---
+    const slug = path.basename(planFile, '.md');
+    const reportPath = path.join(reportsDir, `plan-${slug}.md`);
+    const hasReport = fs.existsSync(reportPath);
+
+    results.push({
+      file: planFile,
+      title,
+      issue,
+      status,
+      created,
+      all_phases_done: allPhasesDone,
+      has_report: hasReport,
+      phase_count: phaseStatuses.length,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Staleness warnings (Phase 6)
 // ---------------------------------------------------------------------------
 
@@ -1615,9 +1743,26 @@ if (require.main === module) {
       const checkboxes = scanCheckboxes();
       const commits = parseCommits({ since: sinceGit });
       const stalenessWarnings = checkStaleness(worktrees);
+      const planFindings = scanPlans();
+      const planWarnings = [];
+      for (const pf of planFindings) {
+        if (pf.all_phases_done) {
+          const t = pf.title;
+          if (pf.status && pf.status.toLowerCase() === 'active') {
+            planWarnings.push(`Plan ${t} appears complete but status is still 'active'`);
+          }
+          if (!pf.has_report) {
+            planWarnings.push(`Plan ${t} complete but no report in reports/`);
+          }
+          if (pf.issue) {
+            planWarnings.push(`Plan ${t} complete — issue #${pf.issue} may need closing (run /briefing verify or check manually)`);
+          }
+        }
+      }
+      const allWarnings = [...stalenessWarnings, ...planWarnings];
       let output = formatSummary(worktrees, checkboxes, commits, { since: since || '24h' });
-      if (stalenessWarnings.length > 0) {
-        output += '\n\nWARNINGS\n' + stalenessWarnings.map(w => `  ! ${w}`).join('\n');
+      if (allWarnings.length > 0) {
+        output += '\n\nWARNINGS\n' + allWarnings.map(w => `  ! ${w}`).join('\n');
       }
       console.log(output);
       break;
@@ -1685,6 +1830,7 @@ module.exports = {
   getWorktreeCommits,
   generateReportPath,
   checkStaleness,
+  scanPlans,
   preserveCheckboxes,
   // Internal helpers exported for testing
   parseLanded,

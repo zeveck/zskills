@@ -172,6 +172,29 @@ consume:
 
 ### Required plan structure
 
+Every plan file MUST begin with YAML frontmatter so that `/run-plan` can
+track metadata (especially which GitHub issue to close on completion):
+
+```yaml
+---
+issue: N          # GitHub issue number (omit if not created from an issue)
+title: Plan Title
+created: YYYY-MM-DD
+status: active    # active | complete
+---
+```
+
+**Frontmatter rules:**
+- **`issue`** — include ONLY when `/draft-plan` is invoked from `/fix-issues plan`
+  (or any context that supplies a GitHub issue number). When invoked standalone
+  with no issue context, omit the `issue:` field entirely.
+- **`title`** — the plan title. Because the frontmatter is the authoritative
+  reference, do NOT duplicate the issue number in the `# Plan: <Title>` heading.
+- **`created`** — use the current date (`YYYY-MM-DD`).
+- **`status`** — always starts as `active`. `/run-plan` updates this to
+  `complete` when all phases finish, which also signals it to close the
+  linked GitHub issue (if one is present).
+
 ```markdown
 # Plan: <Title>
 
