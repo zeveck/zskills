@@ -68,7 +68,7 @@ fi
 
 # git add . / git add -A / git add --all (sweeps in unrelated changes)
 # Note: in raw JSON, "git add ." appears as ...git add ."... so we also match \."
-if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.[[:space:]\"\|]) ]] || [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+\.$ ]]; then
+if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.([[:space:]]|\"|\|)) ]] || [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+\.$ ]]; then
   block_with_reason "BLOCKED: git add . / git add -A sweeps in ALL changes, including other sessions' work. Stage files by name: git add file1 file2."
 fi
 
