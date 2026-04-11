@@ -123,6 +123,21 @@ else
 fi
 
 echo ""
+echo "=== Regression: git add character class fix ==="
+
+# The old pattern \.[[:space:\"\|] was a malformed POSIX class.
+# The fix uses alternation: \.([[:space:]]|\"|\|)
+expect_deny "git add . (trailing space)" "git add . "
+expect_deny "git add . (in JSON context)" 'git add ."'
+expect_allow "git add specific file" "git add src/index.ts"
+
+echo ""
+echo "=== Regression: git commit-tree allowed ==="
+
+# git commit-tree is plumbing — must NOT trigger the commit gate
+expect_allow "git commit-tree (plumbing)" "git commit-tree abc123"
+
+echo ""
 
 # ─── Project hook test harness ───
 PROJECT_HOOK="hooks/block-unsafe-project.sh.template"
@@ -296,6 +311,49 @@ teardown_project_test
 setup_project_test
 touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
 (cd "$TEST_TMPDIR" && echo "content" > readme.md && git add readme.md)
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+echo ""
+echo "=== Regression: pipe || false-positive fix ==="
+
+# || (logical-or) must NOT trigger the pipe-test-output block
+setup_project_test
+expect_project_allow "npm test && echo done || echo fail"
+teardown_project_test
+
+# Actual pipe SHOULD still be caught
+setup_project_test
+expect_project_deny "npm test | tail -20"
+teardown_project_test
+
+echo ""
+echo "=== Regression: git commit-tree allowed (project hook) ==="
+
+# git commit-tree is plumbing — must pass through even with tracking active
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+expect_project_allow "git commit-tree abc123"
+teardown_project_test
+
+echo ""
+echo "=== Regression: CODE_FILES extension coverage ==="
+
+# .tsx, .jsx, .cpp etc. must be recognized as code files (trigger test gate)
+# With tracking active + requires unfulfilled, committing code files should block.
+for ext in tsx jsx mjs vue java cpp sh php; do
+  setup_project_test
+  touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+  (cd "$TEST_TMPDIR" && echo "code" > "app.$ext" && git add "app.$ext")
+  expect_project_deny "git commit -m test"
+  teardown_project_test
+done
+
+# .md should still be content-only (allowed)
+setup_project_test
+touch "$TEST_TMPDIR/.claude/tracking/requires.verify-changes"
+(cd "$TEST_TMPDIR" && echo "docs" > readme.md && git add readme.md)
 expect_project_allow "git commit -m test"
 teardown_project_test
 

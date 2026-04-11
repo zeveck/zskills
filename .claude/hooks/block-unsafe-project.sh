@@ -8,7 +8,7 @@
 # Register BOTH this file and block-unsafe-generic.sh in .claude/settings.json
 # on the PreToolUse event, Bash matcher. The generic layer runs first.
 
-INPUT=$(</dev/stdin)
+INPUT=$(cat)
 
 # Only filter Bash commands
 if [[ "$INPUT" != *'"tool_name":"Bash"'* ]] && [[ "$INPUT" != *'"tool_name": "Bash"'* ]]; then
@@ -65,14 +65,15 @@ else
   TEST_PIPE_PATTERN="(${ESCAPED_UNIT}|${ESCAPED_FULL})"
 fi
 
-if [[ "$INPUT" =~ $TEST_PIPE_PATTERN ]] && [[ "$INPUT" == *'|'* ]]; then
+# Only block when a pipe (single |, not || logical-or) immediately follows the test command.
+if [[ "$INPUT" =~ (${TEST_PIPE_PATTERN})[^\|]*\|[^\|] ]]; then
   block_with_reason "Don't pipe test output -- it loses failure details. Instead: ${FULL_TEST_CMD:-npm run test:all} > .test-results.txt 2>&1 then read the file. To inspect results, grep the captured file."
 fi
 
 # ─── CONFIGURE: set your full test command ────────────────────────────
 # Safety net: transcript-based verification on git commit
 # Ensures tests were run before committing code files.
-if [[ "$INPUT" =~ git[[:space:]]+commit ]]; then
+if [[ "$INPUT" =~ git[[:space:]]+commit([[:space:]]|\") ]]; then
   TRANSCRIPT=$(extract_transcript)
   if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     FULL_TEST_CHECK="${FULL_TEST_CMD}"
@@ -105,7 +106,7 @@ if [[ "$INPUT" =~ git[[:space:]]+commit ]]; then
         DIFF_OUTPUT=$(git diff --cached --name-only 2>/dev/null)
         CODE_FILES=""
         while IFS= read -r line; do
-          if [[ "$line" =~ \.(js|ts|json|css|html|rs|py|go|rb)$ ]]; then
+          if [[ "$line" =~ \.(js|jsx|mjs|cjs|ts|tsx|json|css|scss|html|vue|svelte|rs|py|go|rb|java|kt|swift|c|cc|cpp|h|hpp|sh|php)$ ]]; then
             CODE_FILES+="$line"$'\n'
           fi
         done <<< "$DIFF_OUTPUT"
@@ -167,7 +168,7 @@ if [[ "$INPUT" =~ git[[:space:]]+commit ]]; then
       DIFF_OUTPUT=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null)
       CODE_FILES=""
       while IFS= read -r line; do
-        if [[ "$line" =~ \.(js|ts|json|css|html|rs|py|go|rb)$ ]]; then
+        if [[ "$line" =~ \.(js|jsx|mjs|cjs|ts|tsx|json|css|scss|html|vue|svelte|rs|py|go|rb|java|kt|swift|c|cc|cpp|h|hpp|sh|php)$ ]]; then
           CODE_FILES+="$line"$'\n'
         fi
       done <<< "$DIFF_OUTPUT"

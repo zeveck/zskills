@@ -8,7 +8,7 @@
 # Register BOTH this file and block-unsafe-generic.sh in .claude/settings.json
 # on the PreToolUse event, Bash matcher. The generic layer runs first.
 
-INPUT=$(</dev/stdin)
+INPUT=$(cat)
 
 # Only filter Bash commands
 if [[ "$INPUT" != *'"tool_name":"Bash"'* ]] && [[ "$INPUT" != *'"tool_name": "Bash"'* ]]; then

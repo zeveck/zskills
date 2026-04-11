@@ -12,7 +12,7 @@
 #              git commit --no-verify (fix the hook, don't bypass)
 # Optional:    git push (agents should not push; the user pushes when ready)
 
-INPUT=$(</dev/stdin)
+INPUT=$(cat)
 
 # Only filter Bash commands
 if [[ "$INPUT" != *'"tool_name":"Bash"'* ]] && [[ "$INPUT" != *'"tool_name": "Bash"'* ]]; then

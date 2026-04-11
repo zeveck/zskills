@@ -12,7 +12,7 @@
 #              git commit --no-verify (fix the hook, don't bypass)
 # Optional:    git push (agents should not push; the user pushes when ready)
 
-INPUT=$(</dev/stdin)
+INPUT=$(cat)
 
 # Only filter Bash commands
 if [[ "$INPUT" != *'"tool_name":"Bash"'* ]] && [[ "$INPUT" != *'"tool_name": "Bash"'* ]]; then
@@ -68,7 +68,7 @@ fi
 
 # git add . / git add -A / git add --all (sweeps in unrelated changes)
 # Note: in raw JSON, "git add ." appears as ...git add ."... so we also match \."
-if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.[[:space:]\"\|]) ]] || [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+\.$ ]]; then
+if [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+(-A|--all|\.([[:space:]]|\"|\|)) ]] || [[ "$INPUT" =~ git[[:space:]]+add[[:space:]]+\.$ ]]; then
   block_with_reason "BLOCKED: git add . / git add -A sweeps in ALL changes, including other sessions' work. Stage files by name: git add file1 file2."
 fi
 
