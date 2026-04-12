@@ -267,9 +267,9 @@ After writing the meta-plan, check for an existing pipeline sentinel:
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 ```
 
-If no `$MAIN_ROOT/.zskills/tracking/pipeline.research-and-go.*` files exist,
-this is a standalone invocation. Create requirement files for each phase that
-delegates to `/run-plan`:
+If the arguments do NOT contain `parent=research-and-go` (this is a standalone
+invocation), create requirement files for each phase that delegates to
+`/run-plan`:
 
 ```bash
 mkdir -p "$MAIN_ROOT/.zskills/tracking"
@@ -283,8 +283,9 @@ phase that uses `delegate /run-plan`). These files allow a subsequent
 `/run-plan` invocation (or a monitoring tool) to know how many phases the
 meta-plan expects and track which have been completed.
 
-If `pipeline.research-and-go.*` files exist, `/research-and-go` already created
-the requirement files in its Step 1b — do not create duplicates.
+If the arguments contain `parent=research-and-go`, this was dispatched by
+`/research-and-go` which already created the requirement files — do not
+create duplicates.
 
 **Note:** The existing 3-layer `/draft-plan` verification (Step 2b) is fully
 preserved. Tracking supplements the verification process; it does not replace it.

@@ -3,3 +3,7 @@
 __pycache__/
 .zskills/tracking/
 .zskills-tracked
+.test-results.txt
+.test-results-integration.txt
+.review-diff.txt
+.git-diff-full.txt

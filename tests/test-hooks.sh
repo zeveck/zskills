@@ -142,10 +142,10 @@ setup_project_test() {
   # Create mock package.json with test script
   printf '{"scripts":{"test":"vitest","test:all":"vitest run"}}\n' > "$TEST_TMPDIR/package.json"
 
-  # Create mock transcript with test command AND a pipeline skill invocation
-  # (the latter satisfies the transcript fallback guard so tracking
-  # enforcement fires when expected for orchestrator-on-main tests)
-  printf '/run-plan plans/foo.md\nnpm run test:all\n' > "$TEST_TMPDIR/.transcript"
+  # Create mock transcript with test command AND pipeline ID declaration.
+  # ZSKILLS_PIPELINE_ID triggers the transcript-based pipeline association
+  # (tier 2) so tracking enforcement fires for orchestrator-on-main tests.
+  printf 'ZSKILLS_PIPELINE_ID=run-plan.test-plan\nnpm run test:all\n' > "$TEST_TMPDIR/.transcript"
 
   # Initialize git repo (needed for git diff --cached, git-common-dir, etc.)
   (cd "$TEST_TMPDIR" && git init -q && git add -A && git commit -q -m "init" 2>/dev/null)
@@ -217,7 +217,7 @@ echo "=== Project hook: delegation enforcement ==="
 
 # Test: requires.X without fulfilled.X blocks git commit
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 # Stage a code file so it's not content-only
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_deny "git commit -m test"
@@ -225,15 +225,15 @@ teardown_project_test
 
 # Test: requires.X with fulfilled.X allows git commit
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes"
-touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
+touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes.run-plan.test-plan"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_allow "git commit -m test"
 teardown_project_test
 
 # Test: delegation blocks git cherry-pick too
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 expect_project_deny "git cherry-pick abc123"
 teardown_project_test
 
@@ -242,72 +242,57 @@ echo "=== Project hook: step enforcement ==="
 
 # Test: step.X.implement without step.X.verify blocks
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.implement"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_deny "git commit -m test"
 teardown_project_test
 
 # Test: step.X.implement with step.X.verify but no step.X.report blocks
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.implement"
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.verify"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.verify"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_deny "git commit -m test"
 teardown_project_test
 
 # Test: step.X.implement + step.X.verify + step.X.report allows
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.implement"
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.verify"
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.report"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.verify"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.report"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_allow "git commit -m test"
 teardown_project_test
 
 # Test: phasestep.* markers are ignored (not enforced)
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/phasestep.phase1.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/phasestep.run-plan.test-plan.implement"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_allow "git commit -m test"
 teardown_project_test
 
 # Test: step enforcement on cherry-pick
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/step.phase1.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.implement"
 expect_project_deny "git cherry-pick abc123"
 teardown_project_test
 
 echo ""
-echo "=== Project hook: staleness protection ==="
+echo "=== Project hook: no staleness bypass ==="
 
-# Test: stale requires.* (>8h) allows commit despite unfulfilled requirement
+# Test: stale requires.* (>8h) STILL blocks — no staleness bypass
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 # Make requires file look old (>8h = 480min)
-touch -t 202501010000 "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
-(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
-expect_project_allow "git commit -m test"
-teardown_project_test
-
-# Test: fresh requires.* still blocks
-setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
+touch -t 202501010000 "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
 expect_project_deny "git commit -m test"
 teardown_project_test
 
-# Test: scoped staleness — stale Pipeline A doesn't disable fresh Pipeline B
+# Test: fresh requires.* also blocks (same behavior as stale)
 setup_project_test
-printf 'run-plan.pipeline-B\n' > "$TEST_TMPDIR/.zskills-tracked"
-# Pipeline A's requirement is stale
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-A"
-touch -t 202501010000 "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-A"
-# Pipeline B's requirement is fresh
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-B"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
-rm -f "$TEST_TMPDIR/.transcript"
-printf 'npm run test:all\n' > "$TEST_TMPDIR/.transcript"
-# Pipeline B is fresh and unfulfilled → still blocks
 expect_project_deny "git commit -m test"
 teardown_project_test
 
@@ -323,7 +308,7 @@ teardown_project_test
 
 # Test: content-only commits bypass tracking enforcement
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 (cd "$TEST_TMPDIR" && echo "content" > readme.md && git add readme.md)
 expect_project_allow "git commit -m test"
 teardown_project_test
@@ -387,11 +372,40 @@ printf 'npm run test:all\n' > "$TEST_TMPDIR/.transcript"
 expect_project_deny "git commit -m test"
 teardown_project_test
 
-# Test: Transcript fallback (no .zskills-tracked) checks ALL markers
+# Test: Transcript ZSKILLS_PIPELINE_ID scopes to specific pipeline
 setup_project_test
 touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-A"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-B"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
-# Transcript has pipeline skill → fallback fires, checks all markers
+# Transcript declares pipeline A → only pipeline A markers checked
+rm -f "$TEST_TMPDIR/.transcript"
+printf 'npm run test:all\nZSKILLS_PIPELINE_ID=run-plan.pipeline-A\n' > "$TEST_TMPDIR/.transcript"
+# Pipeline A unfulfilled → blocked
+expect_project_deny "git commit -m test"
+teardown_project_test
+
+# Test: Transcript pipeline ID with fulfilled marker allows commit
+setup_project_test
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-A"
+touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes.run-plan.pipeline-A"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-B"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+# Transcript declares pipeline A → pipeline B's unfulfilled marker invisible
+rm -f "$TEST_TMPDIR/.transcript"
+printf 'npm run test:all\nZSKILLS_PIPELINE_ID=run-plan.pipeline-A\n' > "$TEST_TMPDIR/.transcript"
+expect_project_allow "git commit -m test"
+teardown_project_test
+
+# Test: Transcript last-match wins (sequential runs in same session)
+setup_project_test
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-A"
+touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes.run-plan.pipeline-A"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.pipeline-B"
+(cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js)
+# Two pipeline IDs in transcript — last one wins (pipeline B)
+rm -f "$TEST_TMPDIR/.transcript"
+printf 'npm run test:all\nZSKILLS_PIPELINE_ID=run-plan.pipeline-A\nZSKILLS_PIPELINE_ID=run-plan.pipeline-B\n' > "$TEST_TMPDIR/.transcript"
+# Pipeline B unfulfilled ��� blocked (even though pipeline A is fulfilled)
 expect_project_deny "git commit -m test"
 teardown_project_test
 
@@ -422,7 +436,7 @@ echo "=== Project hook: push enforcement ==="
 # Test: git push blocked by unfulfilled requirement
 setup_project_test
 setup_push_remote
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 # Add a code file commit after the remote baseline so @{u}..HEAD has code
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js && git commit -q -m "code")
 expect_project_deny "git push origin main"
@@ -430,15 +444,15 @@ teardown_project_test
 
 # Test: git push allowed when requirement fulfilled
 setup_project_test
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
-touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes.fix-issues.sprint"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
+touch "$TEST_TMPDIR/.zskills/tracking/fulfilled.verify-changes.run-plan.test-plan"
 expect_project_allow "git push origin main"
 teardown_project_test
 
 # Test: git push blocked by step without verification
 setup_project_test
 setup_push_remote
-touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.thermal-domain.implement"
+touch "$TEST_TMPDIR/.zskills/tracking/step.run-plan.test-plan.implement"
 (cd "$TEST_TMPDIR" && echo "var x=1;" > app.js && git add app.js && git commit -q -m "code")
 expect_project_deny "git push origin main"
 teardown_project_test
@@ -455,7 +469,7 @@ teardown_project_test
 # Test: content-only push allowed despite unfulfilled requirements
 setup_project_test
 setup_push_remote
-touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.fix-issues.sprint"
+touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 # Only markdown files in the push diff — no code files
 (cd "$TEST_TMPDIR" && echo "# readme" > README.md && git add README.md && git commit -q -m "docs")
 expect_project_allow "git push origin main"

@@ -645,15 +645,18 @@ verbatim text to a temp file (e.g., `/tmp/issue-NNN.md`) and tell the agent
 to `Read` the file. This avoids the natural LLM tendency to compress long
 text when inlining it in a prompt. Shorter content can be inlined directly.
 
-Before dispatching each fix agent to its worktree, the orchestrator writes the
-pipeline ID to BOTH the worktree and the main repo root:
-
+**Declare pipeline ID** early in execution (before any git operation):
 ```bash
-printf '%s\n' "fix-issues.sprint" > "<worktree-path>/.zskills-tracked"
-printf '%s\n' "fix-issues.sprint" > "$MAIN_ROOT/.zskills-tracked"
+echo "ZSKILLS_PIPELINE_ID=fix-issues.sprint"
 ```
 
-This associates the agent with this pipeline for hook enforcement.
+Before dispatching each fix agent to its worktree, write `.zskills-tracked`:
+```bash
+printf '%s\n' "fix-issues.sprint" > "<worktree-path>/.zskills-tracked"
+```
+
+The echo associates the orchestrator session with this pipeline (read by hook
+from transcript). The `.zskills-tracked` file associates each worktree agent.
 
 Each agent follows this fix workflow:
 
@@ -946,10 +949,9 @@ printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
 ```
 
 After the sprint completes (whether all issues landed or the sprint ended),
-clean up the pipeline association files:
+clean up the sentinel:
 
 ```bash
-rm -f "$MAIN_ROOT/.zskills-tracked"
 rm -f "$MAIN_ROOT/.zskills/tracking/pipeline.fix-issues.sprint"
 ```
 

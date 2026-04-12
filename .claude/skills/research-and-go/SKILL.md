@@ -42,11 +42,12 @@ MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 mkdir -p "$MAIN_ROOT/.zskills/tracking"
 ```
 
-**Check for existing research-and-go pipeline:** If any
-`$MAIN_ROOT/.zskills/tracking/pipeline.research-and-go.*` files exist, STOP.
-Read the file and report its contents — another research-and-go pipeline is
-already in progress. Do not proceed unless this is a deliberate re-run (see
-Re-run Handling below).
+**Check for duplicate pipeline:** Compute the scope slug first (see below),
+then check if `$MAIN_ROOT/.zskills/tracking/pipeline.research-and-go.$SCOPE`
+exists. If it does, STOP — this exact pipeline is already in progress. Read
+the file and report its contents. Do not proceed unless this is a deliberate
+re-run (see Re-run Handling below). Note: other research-and-go pipelines
+with DIFFERENT scopes are fine — they run in parallel without conflict.
 
 **Create the scoped sentinel:**
 
@@ -58,30 +59,33 @@ printf 'skill=research-and-go\ngoal=%s\nstartedAt=%s\n' "$DESCRIPTION" "$(date -
 Where `$DESCRIPTION` is the broad goal passed to this command and `$SCOPE` is a
 slugified version for scoping.
 
-**Write `.zskills-tracked` in the main repo root:**
+**Declare pipeline ID for hook scoping:**
 
 ```bash
-printf '%s\n' "research-and-go.$SCOPE" > "$MAIN_ROOT/.zskills-tracked"
+echo "ZSKILLS_PIPELINE_ID=research-and-go.$SCOPE"
 ```
+
+This echo is read by the tracking hook from the session transcript to scope
+marker checks to this pipeline only. It must happen before any git operation.
 
 ### Re-run Handling
 
-If `pipeline.research-and-go.*` already exists and this is a deliberate re-run
-of the same goal:
+If `pipeline.research-and-go.$SCOPE` already exists and this is a deliberate
+re-run of the same goal:
 
-1. Read the existing `pipeline.research-and-go.*` to confirm the goal matches.
+1. Read the existing `pipeline.research-and-go.$SCOPE` to confirm the goal matches.
 2. Check which `requires.*` files already exist in `$MAIN_ROOT/.zskills/tracking/`.
 3. For each existing requirement, check if a corresponding `fulfilled.*` file
    exists. Only create new requirement files for unfulfilled requirements.
 4. Touch existing `requires.*` files to refresh their mtime (prevents staleness
    false positives).
-5. Overwrite the `pipeline.research-and-go.*` sentinel with a fresh timestamp.
+5. Overwrite the `pipeline.research-and-go.$SCOPE` sentinel with a fresh timestamp.
 
 ## Step 1 — Decompose and Draft
 
-Invoke `/research-and-plan` with `auto` and the full description:
+Invoke `/research-and-plan` with `auto`, `parent=research-and-go`, and the full description:
 
-`/research-and-plan auto <description>`
+`/research-and-plan auto parent=research-and-go <description>`
 
 This:
 
@@ -163,10 +167,9 @@ MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 rm -f "$MAIN_ROOT/.zskills/tracking"/*
 ```
 
-After the pipeline completes, clean up:
+After the pipeline completes, clean up the sentinel:
 
 ```bash
-rm -f "$MAIN_ROOT/.zskills-tracked"
 rm -f "$MAIN_ROOT/.zskills/tracking/pipeline.research-and-go.$SCOPE"
 ```
 

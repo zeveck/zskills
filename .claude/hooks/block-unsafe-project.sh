@@ -149,46 +149,32 @@ if [[ "$INPUT" =~ git[[:space:]]+commit ]]; then
   TRACKING_DIR="$TRACKING_ROOT/.zskills/tracking"
 
   # Pipeline association guard: determine if this session belongs to a tracked
-  # pipeline. Two mechanisms:
+  # pipeline and extract its pipeline ID for scoping.
   #
-  # 1. .zskills-tracked file (primary) — written by orchestrator in the LOCAL
-  #    repo root before dispatching agents. Contains the pipeline ID.
-  #    Works in worktrees (agents get clean transcripts).
+  # Tier 1: .zskills-tracked file in LOCAL repo root (worktree agents).
+  #   Written by orchestrator before dispatching — cannot be skipped by agent.
   #
-  # 2. Transcript check (fallback) — for the orchestrator running on main,
-  #    which has no .zskills-tracked but does have pipeline skills in transcript.
-  #    PIPELINE_ID stays empty — orchestrator sees ALL markers (no scoping).
+  # Tier 2: ZSKILLS_PIPELINE_ID=<id> in transcript (orchestrators on main).
+  #   Orchestrator echoes this early in execution. The transcript is a stable
+  #   append-only JSONL file (survives context compaction). Uses LAST match
+  #   so sequential /run-plan invocations in the same session work correctly.
   #
   # Neither → unrelated session → skip enforcement → parallel work unblocked.
-  REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  LOCAL_ROOT="${LOCAL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
   PIPELINE_ID=""
   TRACKING_SESSION_HAS_PIPELINE=false
 
-  # Primary: .zskills-tracked file in LOCAL repo root
-  if [ -f "$REPO_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$REPO_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
+  # Tier 1: .zskills-tracked file in LOCAL repo root (worktree agents)
+  if [ -f "$LOCAL_ROOT/.zskills-tracked" ]; then
+    PIPELINE_ID=$(cat "$LOCAL_ROOT/.zskills-tracked" 2>/dev/null | tr -d '[:space:]')
     if [ -n "$PIPELINE_ID" ]; then
       TRACKING_SESSION_HAS_PIPELINE=true
     fi
   fi
 
-  # Fallback: transcript check (orchestrator on main)
-  # PIPELINE_ID stays empty — orchestrator is responsible for all its pipelines
+  # Tier 2: ZSKILLS_PIPELINE_ID in transcript (orchestrators on main)
   if ! $TRACKING_SESSION_HAS_PIPELINE && [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-    TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK="${TRANSCRIPT_CONTENT:-$(cat "$TRANSCRIPT" 2>/dev/null)}" || TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK=""
-    for pipeline_skill in "/research-and-go" "/research-and-plan" "/run-plan" "/fix-issues" "/add-block" "/draft-plan" "/verify-changes"; do
-      if [[ "$TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK" == *"$pipeline_skill"* ]]; then
-        TRACKING_SESSION_HAS_PIPELINE=true
-        break
-      fi
-    done
-  fi
-
-  # Also check for .zskills-tracked in MAIN repo root (orchestrator scoping)
-  if ! $TRACKING_SESSION_HAS_PIPELINE && [ -f "$TRACKING_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$TRACKING_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
+    PIPELINE_ID=$(grep -o 'ZSKILLS_PIPELINE_ID=[^[:space:]"]*' "$TRANSCRIPT" 2>/dev/null | tail -1 | cut -d= -f2)
     if [ -n "$PIPELINE_ID" ]; then
       TRACKING_SESSION_HAS_PIPELINE=true
     fi
@@ -211,79 +197,44 @@ if [[ "$INPUT" =~ git[[:space:]]+commit ]]; then
 
     if [ -n "$CODE_FILES" ]; then
 
-      # Staleness check: if matching requires.* files are >8h old, warn but don't block
-      PIPELINE_STALE=false
-      if [ -n "$PIPELINE_ID" ]; then
-        # Scoped: only check requires.* files ending with this pipeline's ID
-        STALE_REQ=""
-        for req in "$TRACKING_DIR"/requires.*; do
-          [ -f "$req" ] || continue
-          reqbase=$(basename "$req")
-          if [[ "$reqbase" == *".$PIPELINE_ID" ]]; then
-            stale_check=$(find "$req" -mmin +480 2>/dev/null)
-            if [ -n "$stale_check" ]; then
-              STALE_REQ="$req"
-              break
-            fi
-          fi
-        done
-      else
-        # Unscoped (orchestrator): check any requires.*
-        STALE_REQ=$(find "$TRACKING_DIR" -name 'requires.*' -mmin +480 2>/dev/null | head -1)
-      fi
-      if [ -n "$STALE_REQ" ]; then
-        echo "WARNING: Stale pipeline detected (requires.* >8h old). To clear: ! bash scripts/clear-tracking.sh" >&2
-        PIPELINE_STALE=true
-      fi
+      # Delegation check: requires.* must have matching fulfilled.*
+      for req in "$TRACKING_DIR"/requires.*; do
+        [ -f "$req" ] || continue
+        base=$(basename "$req")
+        # Pipeline scoping: if PIPELINE_ID is set, only check markers ending with .$PIPELINE_ID
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
+        if [ ! -f "$fulfilled" ]; then
+          block_with_reason "BLOCKED: Required skill invocation '${base#requires.}' not yet fulfilled. Invoke the required skill via the Skill tool. To clear stale tracking: ! bash scripts/clear-tracking.sh"
+        fi
+      done
 
-      # Delegation check (skip if pipeline is stale)
-      if ! $PIPELINE_STALE; then
-        for req in "$TRACKING_DIR"/requires.*; do
-          [ -f "$req" ] || continue
-          base=$(basename "$req")
-          # Pipeline scoping: if PIPELINE_ID is set, only check markers ending with .$PIPELINE_ID
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
-          if [ ! -f "$fulfilled" ]; then
-            block_with_reason "BLOCKED: Required skill invocation '${base#requires.}' not yet fulfilled. Invoke the required skill via the Skill tool. To clear stale tracking: ! bash scripts/clear-tracking.sh"
-          fi
-        done
-      fi
+      # Step enforcement: implement needs verify, verify needs report
+      for impl in "$TRACKING_DIR"/step.*.implement; do
+        [ -f "$impl" ] || continue
+        base=$(basename "$impl" .implement)
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        verify="${impl/\.implement/.verify}"
+        if [ ! -f "$verify" ]; then
+          block_with_reason "BLOCKED: ${base#step.} has implementation but no verification. Run verification before committing. To clear: ! bash scripts/clear-tracking.sh"
+        fi
+      done
 
-      # Step enforcement (skip if pipeline is stale)
-      # Only check step.* prefix, NOT phasestep.* (per-phase progress)
-      if ! $PIPELINE_STALE; then
-        for impl in "$TRACKING_DIR"/step.*.implement; do
-          [ -f "$impl" ] || continue
-          base=$(basename "$impl" .implement)
-          # Pipeline scoping: strip stage suffix, check if remainder ends with pipeline ID
-          # e.g., step.run-plan.thermal-domain → check if ends with .thermal-domain
-          #   for PIPELINE_ID=run-plan.thermal-domain:
-          #   base=step.run-plan.thermal-domain → contains .run-plan.thermal-domain → match
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          verify="${impl/\.implement/.verify}"
-          if [ ! -f "$verify" ]; then
-            block_with_reason "BLOCKED: ${base#step.} has implementation but no verification. Run verification before landing. To clear: ! bash scripts/clear-tracking.sh"
-          fi
-        done
-
-        for verif in "$TRACKING_DIR"/step.*.verify; do
-          [ -f "$verif" ] || continue
-          base=$(basename "$verif" .verify)
-          # Pipeline scoping (same suffix match as implement loop)
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          report="${verif/\.verify/.report}"
-          if [ ! -f "$report" ]; then
-            block_with_reason "BLOCKED: ${base#step.} verified but no report written. Write report before landing. To clear: ! bash scripts/clear-tracking.sh"
-          fi
-        done
-      fi
+      for verif in "$TRACKING_DIR"/step.*.verify; do
+        [ -f "$verif" ] || continue
+        base=$(basename "$verif" .verify)
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        report="${verif/\.verify/.report}"
+        if [ ! -f "$report" ]; then
+          block_with_reason "BLOCKED: ${base#step.} verified but no report written. Write report before committing. To clear: ! bash scripts/clear-tracking.sh"
+        fi
+      done
     fi
   fi
 fi
@@ -327,35 +278,22 @@ if [[ "$INPUT" =~ git[[:space:]]+cherry-pick ]]; then
   TRACKING_ROOT="${TRACKING_ROOT:-$(cd "$(git rev-parse --git-common-dir 2>/dev/null || echo .git)/.." && pwd)}"
   TRACKING_DIR="$TRACKING_ROOT/.zskills/tracking"
 
-  # Pipeline association guard (same logic as commit block)
-  REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  # Pipeline association guard (same two-tier logic as commit block)
+  LOCAL_ROOT="${LOCAL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
   PIPELINE_ID=""
   TRACKING_SESSION_HAS_PIPELINE=false
 
-  # Primary: .zskills-tracked file in LOCAL repo root
-  if [ -f "$REPO_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$REPO_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
+  # Tier 1: .zskills-tracked in LOCAL root (worktree agents)
+  if [ -f "$LOCAL_ROOT/.zskills-tracked" ]; then
+    PIPELINE_ID=$(cat "$LOCAL_ROOT/.zskills-tracked" 2>/dev/null | tr -d '[:space:]')
     if [ -n "$PIPELINE_ID" ]; then
       TRACKING_SESSION_HAS_PIPELINE=true
     fi
   fi
 
-  # Fallback: transcript check (orchestrator on main)
+  # Tier 2: ZSKILLS_PIPELINE_ID in transcript (orchestrators on main)
   if ! $TRACKING_SESSION_HAS_PIPELINE && [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-    TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK="${TRANSCRIPT_CONTENT:-$(cat "$TRANSCRIPT" 2>/dev/null)}" || TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK=""
-    for pipeline_skill in "/research-and-go" "/research-and-plan" "/run-plan" "/fix-issues" "/add-block" "/draft-plan" "/verify-changes"; do
-      if [[ "$TRANSCRIPT_CONTENT_FOR_PIPELINE_CHECK" == *"$pipeline_skill"* ]]; then
-        TRACKING_SESSION_HAS_PIPELINE=true
-        break
-      fi
-    done
-  fi
-
-  # Also check for .zskills-tracked in MAIN repo root (orchestrator scoping)
-  if ! $TRACKING_SESSION_HAS_PIPELINE && [ -f "$TRACKING_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$TRACKING_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
+    PIPELINE_ID=$(grep -o 'ZSKILLS_PIPELINE_ID=[^[:space:]"]*' "$TRANSCRIPT" 2>/dev/null | tail -1 | cut -d= -f2)
     if [ -n "$PIPELINE_ID" ]; then
       TRACKING_SESSION_HAS_PIPELINE=true
     fi
@@ -363,75 +301,43 @@ if [[ "$INPUT" =~ git[[:space:]]+cherry-pick ]]; then
 
   if [ -d "$TRACKING_DIR" ] && $TRACKING_SESSION_HAS_PIPELINE; then
 
-    # Staleness check: if matching requires.* files are >8h old, warn but don't block
-    PIPELINE_STALE=false
-    if [ -n "$PIPELINE_ID" ]; then
-      # Scoped: only check requires.* files ending with this pipeline's ID
-      STALE_REQ=""
-      for req in "$TRACKING_DIR"/requires.*; do
-        [ -f "$req" ] || continue
-        reqbase=$(basename "$req")
-        if [[ "$reqbase" == *".$PIPELINE_ID" ]]; then
-          stale_check=$(find "$req" -mmin +480 2>/dev/null)
-          if [ -n "$stale_check" ]; then
-            STALE_REQ="$req"
-            break
-          fi
-        fi
-      done
-    else
-      # Unscoped (orchestrator): check any requires.*
-      STALE_REQ=$(find "$TRACKING_DIR" -name 'requires.*' -mmin +480 2>/dev/null | head -1)
-    fi
-    if [ -n "$STALE_REQ" ]; then
-      echo "WARNING: Stale pipeline detected (requires.* >8h old). To clear: ! bash scripts/clear-tracking.sh" >&2
-      PIPELINE_STALE=true
-    fi
+    # Delegation check: requires.* must have matching fulfilled.*
+    for req in "$TRACKING_DIR"/requires.*; do
+      [ -f "$req" ] || continue
+      base=$(basename "$req")
+      if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+        continue
+      fi
+      fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
+      if [ ! -f "$fulfilled" ]; then
+        block_with_reason "BLOCKED: Required skill invocation '${base#requires.}' not yet fulfilled. Invoke the required skill via the Skill tool. To clear stale tracking: ! bash scripts/clear-tracking.sh"
+      fi
+    done
 
-    # Delegation check (skip if pipeline is stale)
-    if ! $PIPELINE_STALE; then
-      for req in "$TRACKING_DIR"/requires.*; do
-        [ -f "$req" ] || continue
-        base=$(basename "$req")
-        # Pipeline scoping: if PIPELINE_ID is set, only check markers ending with .$PIPELINE_ID
-        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-          continue
-        fi
-        fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
-        if [ ! -f "$fulfilled" ]; then
-          block_with_reason "BLOCKED: Required skill invocation '${base#requires.}' not yet fulfilled. Invoke the required skill via the Skill tool. To clear stale tracking: ! bash scripts/clear-tracking.sh"
-        fi
-      done
-    fi
+    # Step enforcement: implement needs verify, verify needs report
+    for impl in "$TRACKING_DIR"/step.*.implement; do
+      [ -f "$impl" ] || continue
+      base=$(basename "$impl" .implement)
+      if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+        continue
+      fi
+      verify="${impl/\.implement/.verify}"
+      if [ ! -f "$verify" ]; then
+        block_with_reason "BLOCKED: ${base#step.} has implementation but no verification. Run verification before landing. To clear: ! bash scripts/clear-tracking.sh"
+      fi
+    done
 
-    # Step enforcement (skip if pipeline is stale)
-    if ! $PIPELINE_STALE; then
-      for impl in "$TRACKING_DIR"/step.*.implement; do
-        [ -f "$impl" ] || continue
-        base=$(basename "$impl" .implement)
-        # Pipeline scoping: strip stage suffix, check if remainder ends with pipeline ID
-        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-          continue
-        fi
-        verify="${impl/\.implement/.verify}"
-        if [ ! -f "$verify" ]; then
-          block_with_reason "BLOCKED: ${base#step.} has implementation but no verification. Run verification before landing. To clear: ! bash scripts/clear-tracking.sh"
-        fi
-      done
-
-      for verif in "$TRACKING_DIR"/step.*.verify; do
-        [ -f "$verif" ] || continue
-        base=$(basename "$verif" .verify)
-        # Pipeline scoping (same suffix match as implement loop)
-        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-          continue
-        fi
-        report="${verif/\.verify/.report}"
-        if [ ! -f "$report" ]; then
-          block_with_reason "BLOCKED: ${base#step.} verified but no report written. Write report before landing. To clear: ! bash scripts/clear-tracking.sh"
-        fi
-      done
-    fi
+    for verif in "$TRACKING_DIR"/step.*.verify; do
+      [ -f "$verif" ] || continue
+      base=$(basename "$verif" .verify)
+      if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+        continue
+      fi
+      report="${verif/\.verify/.report}"
+      if [ ! -f "$report" ]; then
+        block_with_reason "BLOCKED: ${base#step.} verified but no report written. Write report before landing. To clear: ! bash scripts/clear-tracking.sh"
+      fi
+    done
   fi
 fi
 
@@ -441,37 +347,27 @@ if [[ "$INPUT" =~ git[[:space:]]+push([[:space:]]|\") ]]; then
   TRACKING_ROOT="${TRACKING_ROOT:-$(cd "$(git rev-parse --git-common-dir 2>/dev/null || echo .git)/.." && pwd)}"
   TRACKING_DIR="$TRACKING_ROOT/.zskills/tracking"
 
-  # Pipeline association guard (same logic as commit/cherry-pick blocks)
-  REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  # Pipeline association guard (same two-tier logic as commit/cherry-pick blocks)
+  LOCAL_ROOT="${LOCAL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
   PIPELINE_ID=""
   TRACKING_SESSION_HAS_PIPELINE=false
 
-  if [ -f "$REPO_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$REPO_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
+  # Tier 1: .zskills-tracked in LOCAL root (worktree agents)
+  if [ -f "$LOCAL_ROOT/.zskills-tracked" ]; then
+    PIPELINE_ID=$(cat "$LOCAL_ROOT/.zskills-tracked" 2>/dev/null | tr -d '[:space:]')
     if [ -n "$PIPELINE_ID" ]; then
       TRACKING_SESSION_HAS_PIPELINE=true
     fi
   fi
 
+  # Tier 2: ZSKILLS_PIPELINE_ID in transcript (orchestrators on main)
   if ! $TRACKING_SESSION_HAS_PIPELINE; then
     TRANSCRIPT=$(extract_transcript)
     if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-      TRANSCRIPT_CONTENT=$(cat "$TRANSCRIPT" 2>/dev/null) || TRANSCRIPT_CONTENT=""
-      for pipeline_skill in "/research-and-go" "/research-and-plan" "/run-plan" "/fix-issues" "/add-block" "/draft-plan" "/verify-changes"; do
-        if [[ "$TRANSCRIPT_CONTENT" == *"$pipeline_skill"* ]]; then
-          TRACKING_SESSION_HAS_PIPELINE=true
-          break
-        fi
-      done
-    fi
-  fi
-
-  if ! $TRACKING_SESSION_HAS_PIPELINE && [ -f "$TRACKING_ROOT/.zskills-tracked" ]; then
-    PIPELINE_ID=$(cat "$TRACKING_ROOT/.zskills-tracked" 2>/dev/null)
-    PIPELINE_ID=$(echo "$PIPELINE_ID" | tr -d '[:space:]')
-    if [ -n "$PIPELINE_ID" ]; then
-      TRACKING_SESSION_HAS_PIPELINE=true
+      PIPELINE_ID=$(grep -o 'ZSKILLS_PIPELINE_ID=[^[:space:]"]*' "$TRANSCRIPT" 2>/dev/null | tail -1 | cut -d= -f2)
+      if [ -n "$PIPELINE_ID" ]; then
+        TRACKING_SESSION_HAS_PIPELINE=true
+      fi
     fi
   fi
 
@@ -490,68 +386,43 @@ if [[ "$INPUT" =~ git[[:space:]]+push([[:space:]]|\") ]]; then
 
     if [ -n "$CODE_FILES" ]; then
 
-      # Staleness check: scoped to pipeline
-      PIPELINE_STALE=false
-      if [ -n "$PIPELINE_ID" ]; then
-        STALE_REQ=""
-        for req in "$TRACKING_DIR"/requires.*; do
-          [ -f "$req" ] || continue
-          reqbase=$(basename "$req")
-          if [[ "$reqbase" == *".$PIPELINE_ID" ]]; then
-            stale_check=$(find "$req" -mmin +480 2>/dev/null)
-            if [ -n "$stale_check" ]; then
-              STALE_REQ="$req"
-              break
-            fi
-          fi
-        done
-      else
-        STALE_REQ=$(find "$TRACKING_DIR" -name 'requires.*' -mmin +480 2>/dev/null | head -1)
-      fi
-      if [ -n "$STALE_REQ" ]; then
-        echo "WARNING: Stale pipeline detected (requires.* >8h old). To clear: ! bash scripts/clear-tracking.sh" >&2
-        PIPELINE_STALE=true
-      fi
+      # Delegation check: requires.* must have matching fulfilled.*
+      for req in "$TRACKING_DIR"/requires.*; do
+        [ -f "$req" ] || continue
+        base=$(basename "$req")
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
+        if [ ! -f "$fulfilled" ]; then
+          block_with_reason "BLOCKED: Required skill invocation '${base#requires.}' not yet fulfilled before pushing. To clear stale tracking: ! bash scripts/clear-tracking.sh"
+        fi
+      done
 
-      if ! $PIPELINE_STALE; then
-        # Delegation check
-        for req in "$TRACKING_DIR"/requires.*; do
-          [ -f "$req" ] || continue
-          base=$(basename "$req")
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          fulfilled="${TRACKING_DIR}/${base/requires./fulfilled.}"
-          if [ ! -f "$fulfilled" ]; then
-            block_with_reason "BLOCKED: git push blocked — required skill invocation '${base#requires.}' not yet fulfilled. Invoke the required skill via the Skill tool. To clear stale tracking: ! bash scripts/clear-tracking.sh"
-          fi
-        done
+      # Step enforcement: implement needs verify, verify needs report
+      for impl in "$TRACKING_DIR"/step.*.implement; do
+        [ -f "$impl" ] || continue
+        base=$(basename "$impl" .implement)
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        verify="${impl/\.implement/.verify}"
+        if [ ! -f "$verify" ]; then
+          block_with_reason "BLOCKED: ${base#step.} has implementation but no verification. Run verification before pushing. To clear: ! bash scripts/clear-tracking.sh"
+        fi
+      done
 
-        # Step enforcement
-        for impl in "$TRACKING_DIR"/step.*.implement; do
-          [ -f "$impl" ] || continue
-          base=$(basename "$impl" .implement)
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          verify="${impl/\.implement/.verify}"
-          if [ ! -f "$verify" ]; then
-            block_with_reason "BLOCKED: git push blocked — ${base#step.} has implementation but no verification. Run verification before pushing. To clear: ! bash scripts/clear-tracking.sh"
-          fi
-        done
-
-        for verif in "$TRACKING_DIR"/step.*.verify; do
-          [ -f "$verif" ] || continue
-          base=$(basename "$verif" .verify)
-          if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
-            continue
-          fi
-          report="${verif/\.verify/.report}"
-          if [ ! -f "$report" ]; then
-            block_with_reason "BLOCKED: git push blocked — ${base#step.} verified but no report written. Write report before pushing. To clear: ! bash scripts/clear-tracking.sh"
-          fi
-        done
-      fi
+      for verif in "$TRACKING_DIR"/step.*.verify; do
+        [ -f "$verif" ] || continue
+        base=$(basename "$verif" .verify)
+        if [ -n "$PIPELINE_ID" ] && [[ "$base" != *".$PIPELINE_ID" ]]; then
+          continue
+        fi
+        report="${verif/\.verify/.report}"
+        if [ ! -f "$report" ]; then
+          block_with_reason "BLOCKED: ${base#step.} verified but no report written. Write report before pushing. To clear: ! bash scripts/clear-tracking.sh"
+        fi
+      done
     fi
   fi
 fi

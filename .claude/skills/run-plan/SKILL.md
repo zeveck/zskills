@@ -461,12 +461,18 @@ agent hasn't returned after 2 hours, declare it **failed**:
    - `npm run test:all` before every commit — not just `npm test`
    - Tests alongside implementation, not deferred to later
    - The implementation agent does NOT commit. The verification agent runs the full test suite and commits if verification passes. This ensures the hook's test gate is satisfied (the committing agent's transcript contains the test command).
-   - **Before dispatching any worktree agent**, the orchestrator writes the pipeline ID to BOTH the worktree and the main repo root:
+   - **Declare pipeline ID** early in execution (before any git operation):
+     ```bash
+     echo "ZSKILLS_PIPELINE_ID=run-plan.$TRACKING_ID"
+     ```
+     This echo is read by the tracking hook from the session transcript to
+     scope marker checks to this pipeline. Uses last-match so re-invocations
+     in the same session work correctly.
+   - **Before dispatching any worktree agent**, write `.zskills-tracked` in the worktree:
      ```bash
      printf '%s\n' "run-plan.$TRACKING_ID" > "<worktree-path>/.zskills-tracked"
-     printf '%s\n' "run-plan.$TRACKING_ID" > "$MAIN_ROOT/.zskills-tracked"
      ```
-     Where `$TRACKING_ID` is the plan slug (e.g., `thermal-domain`). This file associates agents with this pipeline for hook enforcement.
+     Where `$TRACKING_ID` is the plan slug (e.g., `thermal-domain`). This file associates the worktree agent with this pipeline for hook enforcement.
    - **Rebase onto current main before final commit:**
      ```bash
      git fetch origin main && git rebase origin/main
@@ -987,10 +993,9 @@ printf 'skill: run-plan\nid: %s\nplan: %s\nphase: %s\nstatus: complete\ndate: %s
   > "$MAIN_ROOT/.zskills/tracking/fulfilled.run-plan.$TRACKING_ID"
 ```
 
-Remove the `.zskills-tracked` files to avoid associating future sessions with a dead pipeline:
+Remove the worktree's `.zskills-tracked` to avoid associating future agents with a dead pipeline:
 ```bash
 rm -f "<worktree-path>/.zskills-tracked"
-rm -f "$MAIN_ROOT/.zskills-tracked"
 ```
 
 In `finish` mode, per-phase markers use the `phasestep` prefix (the hook

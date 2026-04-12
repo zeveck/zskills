@@ -37,9 +37,9 @@ The tracking enforcement system has several bugs that make it ineffective:
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 -- Hook Overhaul | 🟡 In Progress | fc8e9cf | Implemented + verified in worktree |
-| 2 -- Test Suite | 🟡 In Progress | 60b1fa6 | 68 tests, 0 failures |
-| 3 -- Skill Text Updates | pending | | Commit workflow + .zskills-tracked + scoped pipeline sentinel |
+| 1 -- Hook Overhaul | ✅ Done | faab84b | Core enforcement model fix |
+| 2 -- Test Suite | ✅ Done | faab84b | 68 tests, 0 failures |
+| 3 -- Skill Text Updates | ✅ Done | faab84b | Commit workflow + .zskills-tracked + scoped sentinel |
 
 ---
 
