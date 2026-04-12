@@ -40,10 +40,9 @@ if [[ "$INPUT" =~ (bash[[:space:]]|[^a-zA-Z]sh[[:space:]]|\.\/).*clear-tracking 
 fi
 
 # ─── Config file protection ───
-# .zskills/config.json is user-managed. Block agent writes, allow reads.
-if [[ "$INPUT" =~ ((\>|tee|sed[[:space:]]+-i|cp|mv)[[:space:]].*\.zskills/config|echo[[:space:]].*\.zskills/config) ]]; then
-  block_with_reason "BLOCKED: .zskills/config.json is user-managed. Do not modify it directly. Ask the user to update the config."
-fi
+# Config lives at .claude/zskills-config.json — protected by Claude Code's
+# built-in permission system on ALL tools (Bash, Write, Edit). No custom
+# hook needed. Agent writes trigger a permission prompt automatically.
 
 # ─── CONFIGURE: remove this section if you don't use session logging ───
 # git add .claude/logs/ (sweeps in all sessions' logs -- stage specific files)

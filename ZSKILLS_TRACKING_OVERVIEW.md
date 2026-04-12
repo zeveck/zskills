@@ -216,7 +216,7 @@ By separating implementation from committing, the system guarantees that every c
 
 ## Config Protection
 
-`.zskills/config.json` is a user-managed configuration file. The hook blocks all agent writes (via `>`, `tee`, `sed -i`, `cp`, `mv`, `echo`) but allows reads (`cat`, `grep`). If an agent needs configuration changed, it must ask the user.
+`.claude/zskills-config.json` is a user-managed configuration file. It lives in `.claude/` where Claude Code's built-in permission system protects it from agent writes via ALL tools (Bash, Write, Edit). Agent writes trigger a permission prompt automatically — no custom hook needed. Agents can read the config freely. If an agent needs configuration changed, it must ask the user.
 
 ## Cleanup
 

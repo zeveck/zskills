@@ -65,8 +65,10 @@ The existing `### Execution: main` behavior, renamed to `direct`:
 
 ## Config File
 
-**Location:** `.zskills/config.json` (hook-protected against agent writes,
-reads allowed). In our namespace alongside `.zskills/tracking/`.
+**Location:** `.claude/zskills-config.json`. Protected by Claude Code's
+built-in permission system on ALL tools (Bash, Write, Edit) — agent writes
+trigger a permission prompt automatically. No custom hook needed. This is
+consistent with where zskills already lives (`.claude/skills/`, `.claude/hooks/`).
 
 **Schema:**
 ```json
@@ -203,7 +205,6 @@ Config default overridden by argument. `direct` + `main_protected: true` → err
    pass. Config could include `auto_merge: true`. Low priority — user can
    merge manually.
 
-3. **Config location finality:** We discussed both `.claude/zskills-config.json`
-   (Claude Code's namespace, permission-protected) and `.zskills/config.json`
-   (our namespace, hook-protected). The hook already protects `.zskills/config`.
-   Either works; the plan should pick one and be consistent.
+3. **Config location:** RESOLVED. `.claude/zskills-config.json` — protected by
+   Claude Code's built-in permission system on all tools. Consistent with
+   `.claude/skills/` and `.claude/hooks/`. No custom hook needed.

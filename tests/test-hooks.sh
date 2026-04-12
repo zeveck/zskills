@@ -475,23 +475,9 @@ touch "$TEST_TMPDIR/.zskills/tracking/requires.verify-changes.run-plan.test-plan
 expect_project_allow "git push origin main"
 teardown_project_test
 
-echo ""
-echo "=== Project hook: config file protection ==="
-
-setup_project_test
-
-# Block writes
-expect_project_deny "echo '{}' > .zskills/config.json"
-expect_project_deny "tee .zskills/config.json"
-expect_project_deny "sed -i 's/a/b/' .zskills/config.json"
-expect_project_deny "cp template.json .zskills/config.json"
-expect_project_deny "mv tmp.json .zskills/config.json"
-
-# Allow reads
-expect_project_allow "cat .zskills/config.json"
-expect_project_allow "grep debug .zskills/config.json"
-
-teardown_project_test
+# Config file protection: handled by Claude Code's built-in permission system
+# on .claude/ directory. No custom hook tests needed — Claude Code gates all
+# tools (Bash, Write, Edit) for .claude/ paths automatically.
 
 echo ""
 echo "---"
