@@ -503,6 +503,17 @@ themselves only process Bash tool inputs (they exit early for other tools).
 
 Report: "Installed N hooks: [list]"
 
+#### Step C.5 — Statusline (optional)
+
+If `.claude/settings.json` already has a `"statusLine"` key, skip.
+
+Otherwise, offer to install: "Add zskills statusline? Shows context window,
+5-hour, and 7-day rate limits as colored bars."
+
+If yes: copy `$PORTABLE/scripts/statusline.sh` to `~/.claude/statusline-command.sh`
+and add `"statusLine": {"type":"command","command":"bash ~/.claude/statusline-command.sh"}`
+to `.claude/settings.json`. Users can customize further with `/statusline`.
+
 #### Step D — Fill script gaps
 
 Copy missing scripts from `$PORTABLE/scripts/` to `scripts/`.
