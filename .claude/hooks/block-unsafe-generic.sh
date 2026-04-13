@@ -80,9 +80,41 @@ fi
 # ─── git push: block main/master, allow feature branches ───────────
 # Agents can push feature branches (needed for PR workflow) but not main.
 # The user pushes main when ready: ! git push
+#
+# Detection: parse the push target from the command itself, not from
+# git branch --show-current (which returns the MAIN repo's branch even
+# when the agent is working in a worktree via cd).
 if [[ "$INPUT" =~ git[[:space:]]+push ]]; then
-  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-  if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  PUSH_TARGET=""
+  # Extract the command string from JSON input
+  PUSH_CMD=$(echo "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' | sed 's/\\"/"/g')
+  if [ -z "$PUSH_CMD" ]; then
+    PUSH_CMD=$(echo "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  fi
+
+  # Parse: git push [-u] [remote] [refspec]
+  # Strip flags (-u, --set-upstream, -f, --force, etc.) and find positional args
+  PUSH_ARGS=""
+  for word in $PUSH_CMD; do
+    case "$word" in
+      git|push) continue ;;
+      -*) continue ;;  # skip flags
+      *) PUSH_ARGS="$PUSH_ARGS $word" ;;
+    esac
+  done
+  # PUSH_ARGS is now "remote refspec" or "remote" or ""
+  PUSH_REMOTE=$(echo "$PUSH_ARGS" | awk '{print $1}')
+  PUSH_TARGET=$(echo "$PUSH_ARGS" | awk '{print $2}')
+
+  # If no explicit refspec, fall back to current branch
+  if [ -z "$PUSH_TARGET" ]; then
+    PUSH_TARGET=$(git branch --show-current 2>/dev/null)
+  fi
+
+  # Strip remote-side of refspec if present (e.g., local:remote)
+  PUSH_TARGET="${PUSH_TARGET%%:*}"
+
+  if [ "$PUSH_TARGET" = "main" ] || [ "$PUSH_TARGET" = "master" ]; then
     block_with_reason "BLOCKED: Agents must not push to main/master. Push feature branches instead, or the user can run: ! git push"
   fi
 fi

@@ -654,7 +654,7 @@ printf 'run-plan.test-plan\n' > "$push_tracking_tmpdir/.zskills-tracked"
 # Add a requires file without fulfilled — should block push with code files
 touch "$push_tracking_tmpdir/.zskills/tracking/requires.verify-changes.run-plan.test-plan"
 PUSH_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git push -u origin feat/test\"},\"transcript_path\":\"$push_tracking_tmpdir/.transcript\"}"
-PUSH_RESULT=$(echo "$PUSH_JSON" | REPO_ROOT="$push_tracking_tmpdir" LOCAL_ROOT="$push_tracking_tmpdir" TRACKING_ROOT="$push_tracking_tmpdir" bash "$push_tracking_tmpdir/.claude/hooks/block-unsafe-project.sh" 2>/dev/null)
+PUSH_RESULT=$(cd "$push_tracking_tmpdir" && echo "$PUSH_JSON" | REPO_ROOT="$push_tracking_tmpdir" LOCAL_ROOT="$push_tracking_tmpdir" TRACKING_ROOT="$push_tracking_tmpdir" bash "$push_tracking_tmpdir/.claude/hooks/block-unsafe-project.sh" 2>/dev/null)
 if [[ "$PUSH_RESULT" == *"Required skill invocation"* ]] || [[ "$PUSH_RESULT" == *"not yet fulfilled"* ]]; then
   pass "push tracking: no-upstream fallback detects code files and enforces tracking"
 else
