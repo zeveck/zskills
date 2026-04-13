@@ -24,7 +24,8 @@ The tracking system is DONE and working. This plan builds on top of it. Tracking
 | 3b-iii -- CI Integration + Fix Cycle + Auto-Merge | ⬜ | | CI polling, fix agents, auto-merge, PR comments |
 | 4 -- /fix-issues PR Landing | ⬜ | | Per-issue branches, PR creation |
 | 5a -- Skill Propagation | ⬜ | | research-and-go, research-and-plan, draft-plan |
-| 5b -- Execution Skills + Documentation + New Features | ⬜ | | do, commit, CLAUDE_TEMPLATE, update-zskills, cleanup, agents.min_model, baseline snapshot |
+| 5b -- Execution Skills + Documentation | ⬜ | | do, commit, CLAUDE_TEMPLATE, update-zskills |
+| 5c -- Infrastructure: Cleanup, Model Gate, Baseline | ⬜ | | cleanup tooling, agents.min_model, baseline snapshot |
 
 ---
 
@@ -1124,6 +1125,33 @@ echo "$PIPELINE_ID" > "$WORKTREE_PATH/.zskills-tracked"
 - [ ] Worktree reuse: check if exists before creating (resume support)
 - [ ] Pipeline association via `.zskills-tracked`
 
+**Orchestrator practice -- test baseline capture:** Add to the /run-plan skill text (Phase 2 dispatch section): before dispatching the implementation agent, the orchestrator captures a test baseline in the worktree:
+
+```bash
+# Orchestrator captures baseline BEFORE impl agent starts
+cd "$WORKTREE_PATH"
+if [ -n "$FULL_TEST_CMD" ]; then
+  $FULL_TEST_CMD > .test-baseline.txt 2>&1 || true
+fi
+```
+
+This is an orchestrator-level practice, not a phase-specific work item. It applies to all modes (cherry-pick, PR, direct). The full implementation is in Phase 5c.3; this note ensures the /run-plan skill text includes the hook point.
+
+- [ ] Add test baseline capture hook point to /run-plan Phase 2 dispatch instructions (orchestrator runs `$FULL_TEST_CMD > .test-baseline.txt` before impl dispatch)
+
+#### 3b.2a -- SKILL.md insertion points
+
+When modifying `skills/run-plan/SKILL.md`, insert PR mode code at these specific locations:
+
+1. **PR mode worktree creation (Phase 2 -- Dispatch):** Insert AFTER the `### Worktree mode` section, gated on `LANDING_MODE == pr`. The new section is `### PR mode (Phase 2)` and contains the named branch creation, deterministic worktree path, and resume logic.
+
+2. **PR mode landing (Phase 6 -- Landing):** Insert AFTER the `### Worktree mode landing` section (cherry-pick flow), gated on `LANDING_MODE == pr`. The new section is `### PR mode landing` and contains push + `gh pr create` + `.landed` marker.
+
+Both insertions are gated: when `LANDING_MODE` is not `pr`, these sections are skipped and existing cherry-pick behavior is unchanged.
+
+- [ ] Insert PR mode branch in SKILL.md Phase 2 after `### Worktree mode`, gated on `LANDING_MODE == pr`
+- [ ] Insert PR landing in SKILL.md Phase 6 after `### Worktree mode landing`, gated on `LANDING_MODE == pr`
+
 #### 3b.3 -- Rebase strategy
 
 Rebase onto latest main **only when the tree is clean**. NEVER stash + rebase (stash pop frequently conflicts). NEVER `git merge origin/main` (creates merge commits on phase 2+).
@@ -1452,9 +1480,42 @@ test_main_protected_feature_branch_allowed() {
   RESULT=$(echo "$INPUT" | REPO_ROOT="$TEST_TMPDIR" bash "$HOOK")
   [[ "$RESULT" != *"main branch is protected"* ]] || fail "Should not block on feature branch"
 }
+
+# Test: land-phase.sh accepts status: pr-ready as safe-to-remove
+test_land_phase_accepts_pr_ready() {
+  setup_project_test
+  MOCK_WT="$TEST_TMPDIR/mock-pr-worktree"
+  mkdir -p "$MOCK_WT"
+  cat > "$MOCK_WT/.landed" <<LANDED
+status: pr-ready
+date: 2026-04-13T12:00:00-04:00
+source: run-plan
+method: pr
+branch: feat/test
+pr: https://github.com/owner/repo/pull/42
+LANDED
+  # Verify the marker is recognized as safe-to-remove
+  grep -q 'status: pr-ready' "$MOCK_WT/.landed" || fail "Expected status: pr-ready in marker"
+}
+
+# Test: slug normalization edge cases
+test_slug_normalization() {
+  # These tests verify bash string operations that construct branch names
+  # and worktree paths. They catch implementation bugs in path construction
+  # (e.g., wrong tr arguments, missed case conversion, underscore handling).
+  PLAN_FILE="plans/ADD_FILTER_BLOCK.md"
+  PLAN_SLUG=$(basename "$PLAN_FILE" .md | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+  [[ "$PLAN_SLUG" == "add-filter-block" ]] || fail "Expected add-filter-block, got $PLAN_SLUG"
+
+  PLAN_FILE2="plans/FIX_MAIN_LOOP.md"
+  PLAN_SLUG2=$(basename "$PLAN_FILE2" .md | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+  [[ "$PLAN_SLUG2" == "fix-main-loop" ]] || fail "Expected fix-main-loop, got $PLAN_SLUG2"
+}
 ```
 
-- [ ] Add 7+ tests covering: .landed marker statuses (4), branch naming, worktree path, main_protected on feature branch
+**Note on string assertion tests (branch naming, worktree paths, slug normalization):** These tests verify bash string operations (`tr`, `basename`, variable interpolation) that construct branch names and worktree paths. While they look trivial, they catch real implementation bugs: wrong `tr` arguments, missed case conversion, underscore-vs-hyphen confusion, empty `branch_prefix` handling. They are not deep integration tests, but they prevent the class of bug where path construction silently produces wrong values that only fail later during `git worktree add` or `git push`.
+
+- [ ] Add 9+ tests covering: .landed marker statuses (4), branch naming, worktree path, main_protected on feature branch, land-phase.sh pr-ready acceptance, slug normalization
 - [ ] All tests pass alongside pre-existing tests
 
 #### 3b.8 -- Sync installed copies
@@ -1488,7 +1549,7 @@ test_main_protected_feature_branch_allowed() {
 - [ ] `.landed` marker includes `branch`, `pr`, `commits` fields
 - [ ] `scripts/land-phase.sh` accepts `status: pr-ready` as safe-to-remove
 - [ ] Mixed mode ban enforced in PR plans
-- [ ] Tests in `tests/test-hooks.sh` (new file, not test-hooks.sh -- prevents cherry-pick conflicts)
+- [ ] Tests in `tests/test-hooks.sh`
 - [ ] 9+ PR mode tests pass (markers, naming, paths, config)
 - [ ] Installed skill copy synced
 
@@ -2030,9 +2091,18 @@ EOF
     fi
   fi
 
-  # CI check + auto-merge: same pattern as 3b-iii
+  # CI check + auto-merge: same pattern as 3b-iii, with per-issue timeout adjustment.
   # (config re-read, pre-check, polling, fix cycle, auto-merge, .landed marker)
-  # Only difference: source is "fix-issues" and marker includes issue: field
+  # Only difference: source is "fix-issues" and marker includes issue: field.
+  #
+  # IMPORTANT: Use `timeout 300` (5 min) per issue instead of 600, to avoid
+  # serial accumulation across N issues (N * 10min = unacceptable for 5+ issues).
+  # If CI doesn't resolve in 5 min for a given issue, write `status: pr-ready`
+  # and move on -- the next cron turn or the user can re-check.
+  #
+  # Parallel optimization: if the orchestrator can dispatch sub-agents, each
+  # issue's CI polling can run in parallel. This is not required for the initial
+  # implementation but should be noted as a future optimization.
 
   # .landed marker includes issue field
   cat > "$WORKTREE_PATH/.landed.tmp" <<LANDED
@@ -2058,7 +2128,7 @@ done
 - [ ] Push + PR creation for each fixed issue
 - [ ] PR body includes `Fixes #NNN` for auto-close linking
 - [ ] Handle existing PRs (update, don't duplicate)
-- [ ] CI check + auto-merge per issue (same pattern as 3b-iii)
+- [ ] CI check + auto-merge per issue (same pattern as 3b-iii, but `timeout 300` per issue instead of 600 to avoid serial accumulation)
 - [ ] `.landed` marker includes `issue:` field in addition to standard PR fields
 
 #### 4.4 -- /fix-report: PR-aware review flow
@@ -2132,7 +2202,7 @@ LANDED
 - [ ] `.landed` status: `landed`/`pr-ready`/`pr-ci-failing`/`pr-failed`
 - [ ] `.landed` marker includes `issue:` field
 - [ ] `/fix-report` shows PR URLs
-- [ ] Tests in `tests/test-hooks.sh` (not test-hooks.sh)
+- [ ] Tests in `tests/test-hooks.sh`
 - [ ] 3+ /fix-issues PR mode tests pass (naming, path, marker)
 - [ ] Installed skill copy synced
 
@@ -2141,8 +2211,8 @@ LANDED
 Phase 1 (config file).
 Phase 2 (main_protected validation).
 Phase 3a (landing mode detection pattern -- reuse the same approach).
-Phase 3b-ii (PR mode worktree setup, push+PR, .landed markers).
-Phase 3b-iii (CI integration, auto-merge pattern).
+Phase 3b-ii (PR mode worktree setup, push+PR, .landed markers) -- **hard dependency for core flow**.
+Phase 3b-iii (CI integration, auto-merge pattern) -- **soft dependency**. Phase 4 core flow (push, create PR, `.landed` marker) only needs 3b-ii. CI polling per issue (4.3 CI section) depends on 3b-iii. Phase 4 can start as soon as 3b-ii lands; the CI integration per-issue can be added after 3b-iii lands or stubbed as `status: pr-ready` without CI.
 
 ---
 
@@ -2233,17 +2303,19 @@ argument always takes precedence.
 - [ ] `/draft-plan` embeds landing hints for non-default modes
 - [ ] All installed skill copies synced and verified
 
+**Testing note:** 5a changes are skill text only (no code, no hooks, no scripts). Verification is structural -- the agent reviews the diff to confirm the detection pattern and downstream propagation are correctly inserted. No automated tests are needed for this phase.
+
 ### Dependencies (5a)
 
 Phase 3a (landing mode detection pattern).
 
 ---
 
-## Phase 5b -- Execution Skills + Documentation + New Features
+## Phase 5b -- Execution Skills + Documentation
 
 ### Goal
 
-Add execution mode support to downstream skills (`/do`, `/commit`), document execution modes in `CLAUDE_TEMPLATE.md`, add execution mode audit to `/update-zskills`, update cleanup tooling for new `.landed` statuses, add `agents.min_model` config enforcement, and add baseline test snapshot capture.
+Add execution mode support to downstream skills (`/do`, `/commit`), document execution modes in `CLAUDE_TEMPLATE.md`, and add execution mode audit to `/update-zskills`.
 
 ### Work Items
 
@@ -2378,11 +2450,48 @@ Add execution mode key phrases to the `/update-zskills` audit checklist:
 - [ ] Add execution mode audit items to `/update-zskills`
 - [ ] Sync installed copy
 
-#### 5b.5 -- Cleanup tooling: recognize new `.landed` statuses
+#### 5b.5 -- Sync all installed copies
+
+- [ ] `skills/do/SKILL.md` -> `.claude/skills/do/SKILL.md`
+- [ ] `skills/commit/SKILL.md` -> `.claude/skills/commit/SKILL.md`
+- [ ] `CLAUDE_TEMPLATE.md` updated
+- [ ] `skills/update-zskills/SKILL.md` -> `.claude/skills/update-zskills/SKILL.md`
+- [ ] Verify all installed copies match sources
+
+### Design & Constraints (5b)
+
+- **`/commit pr` is a convenience.** It's for manual use from any feature branch, not tied to the pipeline. No fix agents, no `.landed` markers.
+- **CLAUDE_TEMPLATE.md is documentation.** It tells the LLM about execution modes so it can make informed decisions.
+
+### Acceptance Criteria (5b)
+
+- [ ] `/do pr` creates worktree, rebases onto main before push, pushes, creates PR, polls CI
+- [ ] `/commit pr` rebases onto main, pushes, creates PR, polls CI
+- [ ] `CLAUDE_TEMPLATE.md` documents all three execution modes
+- [ ] `/update-zskills` audit includes execution mode checks
+- [ ] All installed skill copies synced and verified
+
+### Dependencies (5b)
+
+Phase 3a (landing mode detection pattern).
+Phase 3b-ii (PR mode worktree setup, push+PR pattern).
+Phase 3b-iii (CI integration, auto-merge pattern).
+
+---
+
+## Phase 5c -- Infrastructure: Cleanup Tooling, Model Gate, Baseline Snapshot
+
+### Goal
+
+Update cleanup tooling for new `.landed` statuses, add `agents.min_model` config enforcement, and add baseline test snapshot capture. These are infrastructure improvements that support the execution mode system but are independent of the skill text changes in 5b.
+
+### Work Items
+
+#### 5c.1 -- Cleanup tooling: recognize new `.landed` statuses
 
 Update `/briefing` and `/fix-report` to classify the new `.landed` status values.
-Existing tooling only recognizes `status: full` (safe) and treats everything else
-as "partial." The new statuses need distinct handling:
+Existing tooling only recognizes `status: landed` (safe) and treats everything else
+as unknown. The new statuses need distinct handling:
 
 | Status | Classification | Action |
 |--------|---------------|--------|
@@ -2398,7 +2507,7 @@ as "partial." The new statuses need distinct handling:
 - [ ] `landed` and `pr-ready` -> safe for cleanup; others -> flag for user
 - [ ] Sync installed copies of briefing and fix-report skills
 
-#### 5b.6 -- `agents.min_model` config field + hook enforcement
+#### 5c.2 -- `agents.min_model` config field + hook enforcement
 
 Add an `agents.min_model` field to the config schema and enforce it in the hook. This prevents agents from dispatching subagents with models below a minimum quality threshold.
 
@@ -2429,15 +2538,26 @@ Add an `agents.min_model` field to the config schema and enforce it in the hook.
 
 **Hook enforcement:** In `hooks/block-unsafe-project.sh.template`, when the tool is `Agent` and the input contains a `model` or `model_name` field, extract it and compare against `agents.min_model` from config. Block if the specified model is below the minimum.
 
-The comparison is lexicographic on the model family (opus > sonnet > haiku) -- a simple string check, not a version parser. If `min_model` is `claude-sonnet-4-*`, block `claude-haiku-*` but allow `claude-sonnet-4-*` and `claude-opus-*`.
+The comparison uses an ordinal lookup on the model family, NOT lexicographic (since `opus < sonnet` alphabetically, which is backwards). Extract the family name from the model string and map to an ordinal: `haiku=1, sonnet=2, opus=3`. Compare ordinals: if the requested model's ordinal is less than the minimum model's ordinal, block. If `min_model` is `claude-sonnet-4-*` (ordinal 2), block `claude-haiku-*` (ordinal 1) but allow `claude-sonnet-4-*` (ordinal 2) and `claude-opus-*` (ordinal 3).
+
+```bash
+model_ordinal() {
+  case "$1" in
+    *haiku*) echo 1 ;;
+    *sonnet*) echo 2 ;;
+    *opus*) echo 3 ;;
+    *) echo 99 ;;  # unknown/future model family, allow by default
+  esac
+}
+```
 
 - [ ] Add `agents.min_model` to config schema
 - [ ] Add `agents` section to dogfood config
 - [ ] Add hook enforcement: block Agent calls with model below minimum
-- [ ] Model comparison: family-level (opus > sonnet > haiku), not version-level
+- [ ] Model comparison: ordinal (haiku=1, sonnet=2, opus=3), not lexicographic
 - [ ] Tests in `tests/test-hooks.sh` (config/hook tests belong there)
 
-#### 5b.7 -- Baseline test snapshot
+#### 5c.3 -- Baseline test snapshot
 
 `/run-plan` captures test results BEFORE the implementation agent starts, so the verification agent can compare against a known-good baseline. This detects regressions introduced by the implementation (as opposed to pre-existing failures).
 
@@ -2466,29 +2586,20 @@ After running tests, compare `.test-results.txt` against `.test-baseline.txt`:
 - [ ] Handle missing `FULL_TEST_CMD` (skip baseline if no test command configured)
 - [ ] Tests in `tests/test-hooks.sh`
 
-#### 5b.8 -- Sync all installed copies
+#### 5c.4 -- Sync all installed copies
 
-- [ ] `skills/do/SKILL.md` -> `.claude/skills/do/SKILL.md`
-- [ ] `skills/commit/SKILL.md` -> `.claude/skills/commit/SKILL.md`
-- [ ] `CLAUDE_TEMPLATE.md` updated
-- [ ] `skills/update-zskills/SKILL.md` -> `.claude/skills/update-zskills/SKILL.md`
 - [ ] `config/zskills-config.schema.json` updated with `agents` section
+- [ ] Sync installed copies of briefing and fix-report skills
 - [ ] Verify all installed copies match sources
 
-### Design & Constraints (5b)
+### Design & Constraints (5c)
 
-- **`/commit pr` is a convenience.** It's for manual use from any feature branch, not tied to the pipeline. No fix agents, no `.landed` markers.
-- **CLAUDE_TEMPLATE.md is documentation.** It tells the LLM about execution modes so it can make informed decisions.
-- **`agents.min_model` is family-level.** We compare model families (opus > sonnet > haiku), not specific version strings. This avoids brittle version parsing while still preventing quality downgrades.
+- **`agents.min_model` uses ordinal comparison.** We extract the model family (haiku=1, sonnet=2, opus=3) and compare ordinals. NOT lexicographic -- `opus < sonnet` alphabetically, which gives the wrong result. Unknown families get ordinal 0 (allowed by default).
 - **Baseline snapshot is best-effort.** If `FULL_TEST_CMD` is not configured, skip the baseline. The verification agent still runs tests; it just can't distinguish new vs pre-existing failures.
-- **Phase 5b tests go in `tests/test-hooks.sh`.** Config/hook tests (min_model, baseline) belong in the hook test file.
+- **Phase 5c tests go in `tests/test-hooks.sh`.** Config/hook tests (min_model, baseline) belong in the hook test file.
 
-### Acceptance Criteria (5b)
+### Acceptance Criteria (5c)
 
-- [ ] `/do pr` creates worktree, rebases onto main before push, pushes, creates PR, polls CI
-- [ ] `/commit pr` rebases onto main, pushes, creates PR, polls CI
-- [ ] `CLAUDE_TEMPLATE.md` documents all three execution modes
-- [ ] `/update-zskills` audit includes execution mode checks
 - [ ] `/briefing` and `/fix-report` classify all 6 `.landed` statuses correctly
 - [ ] `agents.min_model` config field exists with schema definition
 - [ ] Hook blocks Agent calls with model below `agents.min_model`
@@ -2496,11 +2607,9 @@ After running tests, compare `.test-results.txt` against `.test-baseline.txt`:
 - [ ] Verification agent compares `.test-results.txt` against `.test-baseline.txt`
 - [ ] All installed skill copies synced and verified
 
-### Dependencies (5b)
+### Dependencies (5c)
 
-Phase 3a (landing mode detection pattern).
-Phase 3b-ii (PR mode worktree setup, push+PR pattern).
-Phase 3b-iii (CI integration, auto-merge pattern).
+Phase 3b-ii (`.landed` statuses, PR mode patterns).
 Phase 4 (fix-issues PR mode, for sprint report PR URLs).
 
 ---
@@ -2553,3 +2662,38 @@ The original plan went through 4 additional rounds of incremental review during 
 - .landed status ambiguity (replaced full/partial with 6 specific statuses)
 - Missing auto-merge flow (added gh pr merge --auto --squash)
 - Missing JSON Schema for config documentation (added config/zskills-config.schema.json)
+
+---
+
+## Drift Log
+
+Structural comparison of the plan as originally drafted (`adb4752`) vs current state.
+
+| Phase | Original (adb4752) | Current | Delta |
+|-------|-------------------|---------|-------|
+| 1 — Config | 1 phase | 1 phase (Done) | No structural drift |
+| 2 — Hook Enforcement | 1 phase | 1 phase (Done) | No structural drift |
+| 3a — Argument Detection | 1 phase | 1 phase (Done) | Added direct mode (not in original) |
+| 3b — PR Mode | 1 phase (6 items) | Split into 3b-i, 3b-ii, 3b-iii | +2 phases. 3b-i (worktree unification + landing script) added during execution. 3b split due to 908-line phase failing from stale `origin/HEAD` base |
+| 4 — /fix-issues | 1 phase | 1 phase | CI timeout reduced to 300s/issue. Soft dep on 3b-iii |
+| 5 — Propagation | 1 phase (9 items) | Split into 5a, 5b, 5c | +2 phases. agents.min_model and baseline test snapshot added during execution. /review-plan removed (separate plan) |
+| **Totals** | **6 phases** | **10 phases** | +4 phases from splits and additions |
+
+**Key execution-time additions not in original draft:**
+- `scripts/land-phase.sh` — atomic worktree cleanup (worktree cleanup kept being forgotten)
+- Preflight check #5 — auto-clean landed worktrees
+- Manual worktrees replacing `isolation: "worktree"` — discovered `origin/HEAD` stale base issue
+- Baseline test snapshot — agents falsely claim failures are "pre-existing"
+- `agents.min_model` config — Sonnet minimum, no Haiku ever
+
+## Plan Review (/refine-plan)
+
+**Refinement process:** /refine-plan with 2 rounds of adversarial review
+**Convergence:** Converged at round 2 (1 minor fix: model_ordinal unknown=99)
+**Remaining concerns:** None
+
+### Round History
+| Round | Reviewer Findings | Devil's Advocate Findings | Substantive | Resolved |
+|-------|-------------------|---------------------------|-------------|----------|
+| 1 | 2 critical, 3 important, 1 minor | 4 critical, 3 important, 1 minor | 11 | 11/11 |
+| 2 | 1 note (model_ordinal) | 1 issue (model_ordinal) | 1 | 1/1 (fixed: unknown=99) |
