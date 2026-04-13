@@ -65,7 +65,7 @@ changed skills, and fills any new gaps.
 
 ## Skill Catalog
 
-### 17 Core Skills (`skills/`)
+### 18 Core Skills (`skills/`)
 
 These work on any software project — web app, CLI tool, API service, game,
 data pipeline.
@@ -75,6 +75,7 @@ data pipeline.
 | Skill | Purpose |
 |-------|---------|
 | `/draft-plan` | Adversarial plan drafting: research, draft, devil's advocate review, refine until converged |
+| `/refine-plan` | Refine in-progress plans: review remaining phases against completed work, generate Drift Log |
 | `/research-and-plan` | Decompose broad goals into focused sub-plans with dependency ordering |
 | `/research-and-go` | Full autonomous pipeline: decompose, plan, execute — one command, walk away |
 | `/plans` | Plan dashboard: index, status tracking, priority ranking, batch execution |
@@ -119,7 +120,7 @@ data pipeline.
 
 ### Block Diagram Add-on (`block-diagram/`)
 
-3 additional skills for block-diagram editors. Not part of the core 17 —
+3 additional skills for block-diagram editors. Not part of the core 18 —
 install if your project involves visual block diagrams.
 See [`block-diagram/README.md`](block-diagram/README.md).
 
