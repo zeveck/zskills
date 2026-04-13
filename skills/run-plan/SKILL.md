@@ -1202,13 +1202,47 @@ PRE_REBASE=$(git rev-parse HEAD)
 git rebase origin/main
 # Tree is clean (verification agent just committed). No stash needed.
 if [ $? -ne 0 ]; then
-  # CRITICAL: abort the rebase to leave the worktree clean.
-  # Without this, the worktree stays in "rebase in progress" state
-  # and all subsequent git operations fail (including cron retries).
-  git rebase --abort
   echo "REBASE CONFLICT: Phase $N changes conflict with main."
 
-  # Write .landed marker so cron turns and cleanup tools know the state.
+  # --- Agent-assisted conflict resolution ---
+  # LLM agents can read both sides of a conflict and resolve intelligently.
+  # Only bail if the conflict is genuinely too complex or resolution fails.
+  #
+  # 1. Check scope: how many files are conflicted?
+  CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+  CONFLICT_COUNT=$(echo "$CONFLICT_FILES" | grep -c .)
+  echo "Conflicted files ($CONFLICT_COUNT): $CONFLICT_FILES"
+
+  # 2. If manageable (≤5 files), attempt resolution
+  if [ "$CONFLICT_COUNT" -le 5 ]; then
+    echo "Attempting agent-assisted resolution..."
+    # The agent reads each conflicted file, understands both sides' intent,
+    # and produces a merged version. For each file:
+    #   - Read the file (contains <<<<<<< / ======= / >>>>>>> markers)
+    #   - Understand what "ours" (the phase work) and "theirs" (main) intended
+    #   - Write a clean merged version that preserves both changes
+    #   - git add <file>
+    #
+    # After resolving all files: git rebase --continue
+    # Then run tests to verify the resolution is correct.
+    #
+    # If tests pass: resolution succeeded, continue normally.
+    # If tests fail: the resolution was wrong. Abort and bail.
+    #   git rebase --abort  (if still rebasing)
+    #   Fall through to the bail block below.
+    #
+    # If the agent genuinely can't understand the conflict (ambiguous intent,
+    # too intertwined, or not confident): don't guess. Abort immediately.
+    # A wrong silent resolution is worse than bailing clearly.
+  fi
+
+  # 3. If resolution wasn't attempted (too many files) or failed:
+  #    Abort the rebase and write a clear conflict marker.
+  #    Check if we're still in a rebase state before aborting.
+  if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
+    git rebase --abort
+  fi
+
   cat > "$WORKTREE_PATH/.landed.tmp" <<LANDED
 status: conflict
 date: $(TZ=America/New_York date -Iseconds)
@@ -1217,18 +1251,28 @@ method: pr
 branch: $BRANCH_NAME
 phase: $N
 reason: rebase-conflict-between-phases
+conflict_files: $CONFLICT_FILES
 commits: $(git log main.."$BRANCH_NAME" --format='%h' | tr '\n' ' ')
 LANDED
   mv "$WORKTREE_PATH/.landed.tmp" "$WORKTREE_PATH/.landed"
 
-  # In interactive mode: report to user and stop.
-  # In auto/cron mode: the cron will fire again later. On the next turn,
-  # it will see the .landed marker with status: conflict and skip this
-  # plan (same as any terminal status). If the user resolves the conflict
-  # manually and removes the .landed marker, the next cron turn will
-  # resume normally. If main moves further and the conflict resolves
-  # itself, the user can delete .landed to retry.
-  echo "Manual resolution required. Wrote .landed with status: conflict."
+  # CLEAR communication: tell the user exactly what happened and how to resume.
+  echo ""
+  echo "=========================================="
+  echo "REBASE CONFLICT — could not auto-resolve"
+  echo "=========================================="
+  echo "Phase: $N"
+  echo "Conflicted files: $CONFLICT_FILES"
+  echo "Worktree: $WORKTREE_PATH (clean — rebase aborted)"
+  echo "Branch: $BRANCH_NAME (all phase commits intact)"
+  echo ""
+  echo "To resume:"
+  echo "  1. cd $WORKTREE_PATH"
+  echo "  2. git rebase origin/main"
+  echo "  3. Resolve conflicts, git add, git rebase --continue"
+  echo "  4. rm .landed"
+  echo "  5. Re-run /run-plan"
+  echo "=========================================="
   exit 1
 fi
 if [ "$(git rev-parse HEAD)" != "$PRE_REBASE" ]; then
@@ -1253,11 +1297,26 @@ git fetch origin main
 PRE_REBASE=$(git rev-parse HEAD)
 git rebase origin/main
 if [ $? -ne 0 ]; then
-  # CRITICAL: abort the rebase to leave the worktree clean.
-  git rebase --abort
-  echo "REBASE CONFLICT: Branch conflicts with main."
+  echo "REBASE CONFLICT: Branch conflicts with main before push."
 
-  # Write .landed marker so cron turns and cleanup tools know the state.
+  # --- Agent-assisted conflict resolution (same as between-phases) ---
+  CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+  CONFLICT_COUNT=$(echo "$CONFLICT_FILES" | grep -c .)
+  echo "Conflicted files ($CONFLICT_COUNT): $CONFLICT_FILES"
+
+  if [ "$CONFLICT_COUNT" -le 5 ]; then
+    echo "Attempting agent-assisted resolution..."
+    # Read each conflicted file, understand both sides, merge intelligently.
+    # After resolving: git add <file>, git rebase --continue, run tests.
+    # If tests pass → continue to push. If tests fail → abort and bail.
+    # If not confident about the resolution → don't guess, abort immediately.
+  fi
+
+  # If resolution wasn't attempted or failed: abort and bail clearly.
+  if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
+    git rebase --abort
+  fi
+
   cat > "$WORKTREE_PATH/.landed.tmp" <<LANDED
 status: conflict
 date: $(TZ=America/New_York date -Iseconds)
@@ -1265,14 +1324,26 @@ source: run-plan
 method: pr
 branch: $BRANCH_NAME
 reason: rebase-conflict-before-push
+conflict_files: $CONFLICT_FILES
 commits: $(git log main.."$BRANCH_NAME" --format='%h' | tr '\n' ' ')
 LANDED
   mv "$WORKTREE_PATH/.landed.tmp" "$WORKTREE_PATH/.landed"
 
-  # In interactive mode: report to user and stop.
-  # In auto/cron mode: .landed with status: conflict is a terminal state.
-  # The cron will see it on the next turn and skip this plan.
-  echo "Manual resolution required. Wrote .landed with status: conflict."
+  echo ""
+  echo "=========================================="
+  echo "REBASE CONFLICT — could not auto-resolve"
+  echo "=========================================="
+  echo "Conflicted files: $CONFLICT_FILES"
+  echo "Worktree: $WORKTREE_PATH (clean — rebase aborted)"
+  echo "Branch: $BRANCH_NAME (all phase commits intact)"
+  echo ""
+  echo "To resume:"
+  echo "  1. cd $WORKTREE_PATH"
+  echo "  2. git rebase origin/main"
+  echo "  3. Resolve conflicts, git add, git rebase --continue"
+  echo "  4. rm .landed"
+  echo "  5. Re-run /run-plan"
+  echo "=========================================="
   exit 1
 fi
 if [ "$(git rev-parse HEAD)" != "$PRE_REBASE" ]; then
