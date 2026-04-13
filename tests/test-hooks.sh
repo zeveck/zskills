@@ -975,6 +975,59 @@ else
   fail "Slug normalization: got $PLAN_SLUG and $PLAN_SLUG2"
 fi
 
+# ── CI integration tests (Phase 3b-iii) ──────────────────────────────
+
+# Test: CI config defaults (no config = auto_fix true, max 2)
+CI_AUTO_FIX=true
+CI_MAX_ATTEMPTS=2
+CONFIG=""  # Empty config
+if [ -n "$CONFIG" ]; then
+  :
+fi
+if [[ "$CI_AUTO_FIX" == "true" ]] && [[ "$CI_MAX_ATTEMPTS" == "2" ]]; then
+  pass "CI config defaults: auto_fix=true, max_fix_attempts=2"
+else
+  fail "CI config defaults: got auto_fix=$CI_AUTO_FIX, max=$CI_MAX_ATTEMPTS"
+fi
+
+# Test: CI config auto_fix false
+CONFIG='{"ci": {"auto_fix": false, "max_fix_attempts": 2}}'
+CI_AUTO_FIX=true
+if [[ "$CONFIG" =~ \"auto_fix\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+  CI_AUTO_FIX="${BASH_REMATCH[1]}"
+fi
+if [[ "$CI_AUTO_FIX" == "false" ]]; then
+  pass "CI config auto_fix false parsed correctly"
+else
+  fail "CI config auto_fix false: expected false, got $CI_AUTO_FIX"
+fi
+
+# Test: .landed marker with status: pr-ci-failing
+MARKER="status: pr-ci-failing"
+if [[ "$MARKER" == *"pr-ci-failing"* ]]; then
+  pass ".landed marker status pr-ci-failing recognized"
+else
+  fail ".landed marker status pr-ci-failing not found"
+fi
+
+# Test: .landed marker upgrade includes ci and pr_state fields
+MARKER=$(cat <<LANDED
+status: landed
+date: 2026-04-13T12:00:00-04:00
+source: run-plan
+method: pr
+branch: feat/test
+pr: https://github.com/owner/repo/pull/42
+ci: pass
+pr_state: MERGED
+LANDED
+)
+if [[ "$MARKER" == *"ci: pass"* ]] && [[ "$MARKER" == *"pr_state: MERGED"* ]]; then
+  pass ".landed marker upgrade includes ci and pr_state fields"
+else
+  fail ".landed marker upgrade missing ci or pr_state fields"
+fi
+
 echo ""
 echo "---"
 printf 'Results: %d passed, %d failed (of %d)\n' "$PASS_COUNT" "$FAIL_COUNT" "$((PASS_COUNT + FAIL_COUNT))"

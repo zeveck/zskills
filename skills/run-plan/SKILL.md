@@ -1432,18 +1432,256 @@ fi
 
 **`.landed` marker for PR mode:**
 
-After successful push + PR creation, write the `.landed` marker. In Phase 3b-ii
-(before CI integration exists), the status is always `pr-ready` — the PR is
-created and awaiting CI/review. Phase 3b-iii adds CI polling and upgrades the
-status to `landed` when auto-merge succeeds.
+After successful push + PR creation, re-read CI config, poll CI checks, run the
+fix cycle if needed, request auto-merge, and write the `.landed` marker with the
+final status based on CI results.
 
 ```bash
-# --- Write .landed marker ---
-# Without CI integration (Phase 3b-iii), we write pr-ready.
-# Phase 3b-iii will insert CI polling + auto-merge between PR creation
-# and this marker write, and will set LANDED_STATUS based on CI results.
-LANDED_STATUS="pr-ready"
+# --- Re-read config at point of use ---
+# Do NOT rely on $CONFIG_CONTENT from earlier -- context compaction may
+# have lost it. Re-read the config file now.
+CI_AUTO_FIX=true
+CI_MAX_ATTEMPTS=2
+FULL_TEST_CMD=""
+CONFIG_FILE="$PROJECT_ROOT/.claude/zskills-config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  CI_CONFIG=$(cat "$CONFIG_FILE" 2>/dev/null)
+  if [[ "$CI_CONFIG" =~ \"auto_fix\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+    CI_AUTO_FIX="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$CI_CONFIG" =~ \"max_fix_attempts\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+    CI_MAX_ATTEMPTS="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$CI_CONFIG" =~ \"full_cmd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+    FULL_TEST_CMD="${BASH_REMATCH[1]}"
+  fi
+fi
+```
 
+**Skip CI when disabled:**
+
+```bash
+if [ "$CI_AUTO_FIX" = "false" ]; then
+  echo "CI auto-fix disabled (ci.auto_fix: false). PR created -- CI results are the user's responsibility."
+  CI_STATUS="skipped"
+fi
+```
+
+**CI pre-check (avoid hang on repos with no CI):**
+
+`gh pr checks --watch` hangs indefinitely if no checks are configured. GitHub
+Actions has a registration delay (5-30s after push), so retry before concluding
+there are no checks:
+
+```bash
+CHECK_COUNT=0
+for _i in 1 2 3; do
+  CHECK_COUNT=$(gh pr checks "$PR_NUMBER" --json name --jq 'length' 2>/dev/null || echo "0")
+  [ "$CHECK_COUNT" != "0" ] && break
+  sleep 10
+done
+if [ "$CHECK_COUNT" = "0" ]; then
+  echo "No CI checks configured for this repo. Skipping CI polling."
+  CI_STATUS="none"
+fi
+```
+
+**CI polling:**
+
+```bash
+echo "Waiting for $CHECK_COUNT CI check(s) on PR #$PR_NUMBER..."
+CI_LOG="/tmp/ci-failure-${PR_NUMBER}.txt"
+
+# Timeout: 10 minutes. In cron mode, a hung --watch blocks the entire turn.
+# Exit code 124 from timeout means "timed out" -- treat as "checks still pending".
+timeout 600 gh pr checks "$PR_NUMBER" --watch 2>"$CI_LOG.stderr"
+CI_EXIT=$?
+
+if [ "$CI_EXIT" -eq 0 ]; then
+  echo "CI checks passed."
+  CI_STATUS="pass"
+elif [ "$CI_EXIT" -eq 124 ]; then
+  echo "CI checks timed out after 10 minutes. Treating as pending."
+  CI_STATUS="pending"
+  # Write .landed with pr-ready so the next cron turn re-checks.
+  # Do NOT enter the fix cycle -- checks are still running, not failing.
+else
+  echo "CI checks failed (exit $CI_EXIT). Reading failure logs..."
+  CI_STATUS="fail"
+  FAILED_RUN_ID=$(gh run list --branch "$BRANCH_NAME" --status failure --limit 1 \
+    --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+  if [ -n "$FAILED_RUN_ID" ]; then
+    gh run view "$FAILED_RUN_ID" --log-failed 2>&1 | head -500 > "$CI_LOG"
+  fi
+fi
+```
+
+Note: `gh pr checks --watch` is used WITHOUT `--fail-fast` (that flag may not
+exist in all gh versions).
+
+**Timeout handling:** If `CI_STATUS` is `"pending"` (timeout exit 124), skip the
+fix cycle entirely and write `.landed` with `status: pr-ready`. The next cron
+turn will re-enter Phase 6, see the existing PR, and re-poll CI.
+
+**CI failure fix cycle:**
+
+```bash
+if [ "$CI_STATUS" = "fail" ] && [ "$CI_MAX_ATTEMPTS" -gt 0 ]; then
+  # Post initial CI status comment using gh api (returns comment ID).
+  # gh pr comment does NOT return comment URL/ID, so we use the API directly.
+  COMMENT_ID=$(gh api "repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
+    -f body="**CI Status:** Investigating failure..." --jq '.id' 2>/dev/null || true)
+
+  for ATTEMPT in $(seq 1 "$CI_MAX_ATTEMPTS"); do
+    echo "CI fix attempt $ATTEMPT/$CI_MAX_ATTEMPTS..."
+
+    # Update the single status comment (edit, not append spam)
+    COMMENT_BODY="**CI Fix -- Attempt $ATTEMPT/$CI_MAX_ATTEMPTS**
+
+Failure from \`gh run view --log-failed\`:
+\`\`\`
+$(tail -50 "$CI_LOG" 2>/dev/null || echo "No failure log available")
+\`\`\`
+
+Attempting fix..."
+    if [ -n "$COMMENT_ID" ]; then
+      gh api -X PATCH "repos/{owner}/{repo}/issues/comments/$COMMENT_ID" \
+        -f body="$COMMENT_BODY" 2>/dev/null || true
+    fi
+
+    # --- Dispatch CI fix agent ---
+    # The /run-plan ORCHESTRATOR dispatches this agent via the Agent tool.
+    # The agent does NOT use isolation: "worktree" -- the worktree already
+    # exists. Instead, the agent's prompt tells it to work in $WORKTREE_PATH.
+    #
+    # Tracking: The worktree has .zskills-tracked (written by the orchestrator
+    # in 3b.1), so the tracking hooks allow commits. The fix agent's
+    # transcript will contain test commands (it runs tests before committing),
+    # satisfying the test gate.
+    #
+    # Agent prompt (inline, not a skill):
+    #
+    #   CI checks failed on PR #$PR_NUMBER for branch $BRANCH_NAME.
+    #   The failure log is at $CI_LOG -- read it to understand what failed.
+    #
+    #   FIRST: cd $WORKTREE_PATH
+    #   All work happens in that directory. Do not work in any other directory.
+    #
+    #   Steps:
+    #   1. Read $CI_LOG. Identify the failure type:
+    #      - Test failure -> find the failing test, read the source, fix the code
+    #      - Build error -> fix the compilation/bundling issue
+    #      - Lint error -> fix the style violation
+    #      - Environment issue -> may not be fixable, report and stop
+    #   2. Make the minimal fix. Do not refactor or improve unrelated code.
+    #   3. Run tests locally to verify the fix:
+    #      - If FULL_TEST_CMD is set: "$FULL_TEST_CMD > .test-results.txt 2>&1"
+    #      - If FULL_TEST_CMD is empty: look for package.json scripts (npm test),
+    #        or test files matching common patterns. If no test command can be
+    #        determined, skip local testing and note it in the commit message.
+    #      Read .test-results.txt to check for failures.
+    #   4. If tests pass, commit with message:
+    #      "fix: address CI failure -- <short description of what was fixed>"
+    #   5. If tests fail on the same error after one fix attempt, STOP.
+    #      Do not thrash. Report what you tried and what failed.
+    #
+    #   Do NOT:
+    #   - Weaken tests to make them pass
+    #   - Skip the local test run
+    #   - Touch code unrelated to the CI failure
+    #   - Use git add . (stage specific files by name)
+
+    # After fix agent completes, push to branch (auto-updates PR, re-triggers CI)
+    cd "$WORKTREE_PATH"
+    git push origin "$BRANCH_NAME"
+
+    # CI registration delay: GitHub needs 5-30s to register new check runs
+    # after a push. Run the same pre-check retry loop before --watch to avoid
+    # watching stale checks from the previous push.
+    echo "Waiting for CI to register new checks after push..."
+    for _j in 1 2 3; do
+      NEW_CHECK_COUNT=$(gh pr checks "$PR_NUMBER" --json name --jq 'length' 2>/dev/null || echo "0")
+      [ "$NEW_CHECK_COUNT" != "0" ] && break
+      sleep 10
+    done
+
+    echo "Waiting for CI re-check..."
+    timeout 600 gh pr checks "$PR_NUMBER" --watch 2>"$CI_LOG.stderr"
+    CI_EXIT=$?
+    if [ "$CI_EXIT" -eq 0 ]; then
+      echo "CI checks passed after fix attempt $ATTEMPT."
+      CI_STATUS="pass"
+      break
+    elif [ "$CI_EXIT" -eq 124 ]; then
+      echo "CI checks timed out after fix attempt $ATTEMPT. Treating as pending."
+      CI_STATUS="pending"
+      break
+    fi
+    # Re-read failure logs for next attempt
+    FAILED_RUN_ID=$(gh run list --branch "$BRANCH_NAME" --status failure --limit 1 \
+      --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+    if [ -n "$FAILED_RUN_ID" ]; then
+      gh run view "$FAILED_RUN_ID" --log-failed 2>&1 | head -500 > "$CI_LOG"
+    fi
+  done
+
+  # Final comment update
+  if [ "$CI_STATUS" = "pass" ]; then
+    FINAL_BODY="**CI Passed** after fix attempt $ATTEMPT. Ready for review."
+  else
+    FINAL_BODY="**CI Fix Exhausted** ($CI_MAX_ATTEMPTS attempts)
+
+CI is still failing. Manual intervention needed.
+
+Last failure:
+\`\`\`
+$(tail -50 "$CI_LOG" 2>/dev/null || echo "No failure log available")
+\`\`\`"
+  fi
+  if [ -n "$COMMENT_ID" ]; then
+    gh api -X PATCH "repos/{owner}/{repo}/issues/comments/$COMMENT_ID" \
+      -f body="$FINAL_BODY" 2>/dev/null || true
+  fi
+fi
+```
+
+**Auto-merge and `.landed` upgrade:**
+
+After CI resolution, request auto-merge and upgrade the `.landed` marker:
+
+```bash
+# --- Auto-merge: request merge when CI passes ---
+# gh pr merge --auto --squash requires that auto-merge is enabled in the
+# GitHub repo settings (Settings > General > Allow auto-merge). It is OFF
+# by default. If not enabled, `--auto` returns exit code 1 with an error
+# about "Auto merge is not allowed for this repository". We suppress this
+# with `|| true`, and the PR stays open with status: pr-ready. The user
+# merges manually. This is the correct fallback -- pr-ready means "agent
+# work is done, PR is ready for human action."
+if [ "$CI_STATUS" = "pass" ] || [ "$CI_STATUS" = "none" ] || [ "$CI_STATUS" = "skipped" ]; then
+  gh pr merge "$PR_NUMBER" --auto --squash 2>/dev/null || true
+  # Give GitHub a moment to process the merge
+  sleep 5
+  PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state' 2>/dev/null || echo "OPEN")
+else
+  PR_STATE="OPEN"
+fi
+
+# --- Determine .landed status ---
+if [ "$CI_STATUS" = "pending" ]; then
+  # Timeout: checks still running. Write pr-ready so next cron turn re-checks.
+  LANDED_STATUS="pr-ready"
+elif [ "$CI_STATUS" = "fail" ]; then
+  LANDED_STATUS="pr-ci-failing"
+elif [ "$PR_STATE" = "MERGED" ]; then
+  LANDED_STATUS="landed"
+else
+  # PR is open -- either awaiting required reviews, or auto-merge
+  # not supported. Agent's work is done either way.
+  LANDED_STATUS="pr-ready"
+fi
+
+# --- Upgrade .landed marker ---
 cat > "$WORKTREE_PATH/.landed.tmp" <<LANDED
 status: $LANDED_STATUS
 date: $(TZ=America/New_York date -Iseconds)
@@ -1451,9 +1689,18 @@ source: run-plan
 method: pr
 branch: $BRANCH_NAME
 pr: $PR_URL
+ci: $CI_STATUS
+pr_state: $PR_STATE
 commits: $(git log main.."$BRANCH_NAME" --format='%h' | tr '\n' ' ')
 LANDED
 mv "$WORKTREE_PATH/.landed.tmp" "$WORKTREE_PATH/.landed"
+
+# --- Cleanup on merge ---
+# When PR was merged (status: landed), call land-phase.sh to remove the worktree.
+# The work is on main via the merge -- the worktree is no longer needed.
+if [ "$LANDED_STATUS" = "landed" ]; then
+  bash scripts/land-phase.sh "$WORKTREE_PATH"
+fi
 ```
 
 **`.landed` status values for PR mode:**
