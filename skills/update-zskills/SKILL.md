@@ -76,6 +76,153 @@ in update mode.
 
 ---
 
+## Step 0.5 — Read Config
+
+Check if `.claude/zskills-config.json` exists in the target project root (`$PROJECT_ROOT`).
+
+**If it exists:**
+1. Read the file content.
+2. Extract values using bash regex (no jq dependency):
+   ```bash
+   CONFIG_CONTENT=$(cat "$PROJECT_ROOT/.claude/zskills-config.json")
+   # Extract a string value (note: ([^\"]*) allows empty strings):
+   if [[ "$CONFIG_CONTENT" =~ \"project_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     PROJECT_NAME="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"unit_cmd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     UNIT_CMD="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"full_cmd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     FULL_CMD="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"output_file\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     OUTPUT_FILE="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"cmd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     DEV_SERVER_CMD="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"port_script\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     PORT_SCRIPT="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"main_repo_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     MAIN_REPO_PATH="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"file_patterns\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     UI_FILE_PATTERNS="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"auth_bypass\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     AUTH_BYPASS="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"timezone\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     TIMEZONE="${BASH_REMATCH[1]}"
+   fi
+   # Extract a boolean value:
+   if [[ "$CONFIG_CONTENT" =~ \"main_protected\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+     MAIN_PROTECTED="${BASH_REMATCH[1]}"
+   fi
+   # Extract landing mode:
+   if [[ "$CONFIG_CONTENT" =~ \"landing\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     LANDING_MODE="${BASH_REMATCH[1]}"
+   fi
+   # Extract branch prefix:
+   if [[ "$CONFIG_CONTENT" =~ \"branch_prefix\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+     BRANCH_PREFIX="${BASH_REMATCH[1]}"
+   fi
+   # Extract CI config:
+   if [[ "$CONFIG_CONTENT" =~ \"auto_fix\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+     CI_AUTO_FIX="${BASH_REMATCH[1]}"
+   fi
+   if [[ "$CONFIG_CONTENT" =~ \"max_fix_attempts\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+     CI_MAX_ATTEMPTS="${BASH_REMATCH[1]}"
+   fi
+   ```
+3. For each template placeholder, use the config value if non-empty.
+4. Copy `config/zskills-config.schema.json` from `$PORTABLE` to
+   `.claude/zskills-config.schema.json` in the target project (so the
+   `$schema` reference in the config resolves correctly).
+
+**If it does not exist:**
+1. Auto-detect values from the project (existing behavior).
+2. Present the auto-detected values to the user and instruct them to create
+   the config file:
+   ```
+   ! cat > .claude/zskills-config.json <<'EOF'
+   {
+     "$schema": "./zskills-config.schema.json",
+     "project_name": "<detected>",
+     "timezone": "America/New_York",
+     "execution": {
+       "landing": "cherry-pick",
+       "main_protected": false,
+       "branch_prefix": "feat/"
+     },
+     "testing": {
+       "unit_cmd": "<detected>",
+       "full_cmd": "<detected>",
+       "output_file": ".test-results.txt",
+       "file_patterns": ["<detected>"]
+     },
+     "dev_server": {
+       "cmd": "<detected>",
+       "port_script": "",
+       "main_repo_path": "<detected>"
+     },
+     "ui": {
+       "file_patterns": "",
+       "auth_bypass": ""
+     },
+     "ci": {
+       "auto_fix": true,
+       "max_fix_attempts": 2
+     }
+   }
+   EOF
+   ```
+   **Important:** `.claude/zskills-config.json` is protected by Claude Code's
+   built-in permission system -- agent writes trigger a prompt. The agent presents
+   the values and instructs the user to create the file using the `!` prefix
+   (user action).
+
+**Merge algorithm pseudocode:**
+```
+for each field F in schema:
+  if config[F] is non-empty string (or true/false for booleans):
+    use config[F]
+  else if auto_detect[F] is non-empty:
+    use auto_detect[F]
+  else:
+    mark as empty -> template section gets commented out
+```
+
+**Template placeholder mapping:**
+
+| Placeholder | Config path | Example |
+|-------------|-------------|---------|
+| `{{UNIT_TEST_CMD}}` | `testing.unit_cmd` | `npm run test` |
+| `{{FULL_TEST_CMD}}` | `testing.full_cmd` | `npm run test:all` |
+| `{{UI_FILE_PATTERNS}}` | `ui.file_patterns` | `src/(components\|ui)/.*\\.tsx?$` |
+| `{{DEV_SERVER_CMD}}` | `dev_server.cmd` | `npm start` |
+| `{{PORT_SCRIPT}}` | `dev_server.port_script` | `scripts/port.sh` |
+| `{{MAIN_REPO_PATH}}` | `dev_server.main_repo_path` | `/workspaces/my-app` |
+| `{{AUTH_BYPASS}}` | `ui.auth_bypass` | `localStorage.setItem(...)` |
+
+**Empty value handling:** When a config field is empty string `""`, the
+corresponding template section is commented out with a TODO marker:
+
+```bash
+# Example: if UI_FILE_PATTERNS is empty, comment out the UI verification section
+# in block-unsafe-project.sh:
+#
+# Before:
+#   UI_FILE_PATTERNS="src/components/.*\.tsx?$"
+#
+# After (empty):
+#   # TODO: Configure UI file patterns in .claude/zskills-config.json
+#   # UI_FILE_PATTERNS=""
+```
+
+---
+
 ## Audit — Gap Analysis (runs as part of every invocation)
 
 The audit scans the project for all Z Skills dependencies and reports what

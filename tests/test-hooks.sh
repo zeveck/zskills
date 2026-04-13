@@ -488,6 +488,57 @@ teardown_project_test
 # tools (Bash, Write, Edit) for .claude/ paths automatically.
 
 echo ""
+echo "=== Config extraction: bash regex ==="
+
+# Test: extract string value from config
+CONFIG='{"project_name": "my-app", "timezone": "America/New_York"}'
+if [[ "$CONFIG" =~ \"project_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && [[ "${BASH_REMATCH[1]}" == "my-app" ]]; then
+  pass "extract string value (project_name=my-app)"
+else
+  fail "extract string value (project_name=my-app)"
+fi
+
+# Test: extract boolean value from config
+CONFIG='{"execution": {"main_protected": true}}'
+if [[ "$CONFIG" =~ \"main_protected\"[[:space:]]*:[[:space:]]*(true|false) ]] && [[ "${BASH_REMATCH[1]}" == "true" ]]; then
+  pass "extract boolean value (main_protected=true)"
+else
+  fail "extract boolean value (main_protected=true)"
+fi
+
+# Test: extract integer value from config
+CONFIG='{"ci": {"max_fix_attempts": 3}}'
+if [[ "$CONFIG" =~ \"max_fix_attempts\"[[:space:]]*:[[:space:]]*([0-9]+) ]] && [[ "${BASH_REMATCH[1]}" == "3" ]]; then
+  pass "extract integer value (max_fix_attempts=3)"
+else
+  fail "extract integer value (max_fix_attempts=3)"
+fi
+
+# Test: empty string value extracted correctly
+CONFIG='{"dev_server": {"cmd": ""}}'
+if [[ "$CONFIG" =~ \"cmd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && [[ "${BASH_REMATCH[1]}" == "" ]]; then
+  pass "extract empty string value (cmd='')"
+else
+  fail "extract empty string value (cmd='')"
+fi
+
+# Test: missing config field falls through (no match)
+CONFIG='{"project_name": "my-app"}'
+if [[ "$CONFIG" =~ \"nonexistent\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+  fail "missing field should not match"
+else
+  pass "missing field falls through (no match)"
+fi
+
+# Test: landing mode extraction
+CONFIG='{"execution": {"landing": "pr", "main_protected": false}}'
+if [[ "$CONFIG" =~ \"landing\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && [[ "${BASH_REMATCH[1]}" == "pr" ]]; then
+  pass "extract landing mode (landing=pr)"
+else
+  fail "extract landing mode (landing=pr)"
+fi
+
+echo ""
 echo "---"
 printf 'Results: %d passed, %d failed (of %d)\n' "$PASS_COUNT" "$FAIL_COUNT" "$((PASS_COUNT + FAIL_COUNT))"
 

@@ -1,0 +1,34 @@
+{
+  "$schema": "./zskills-config.schema.json",
+  "project_name": "zskills",
+  "timezone": "America/New_York",
+
+  "execution": {
+    "landing": "cherry-pick",
+    "main_protected": false,
+    "branch_prefix": "feat/"
+  },
+
+  "testing": {
+    "unit_cmd": "bash tests/test-hooks.sh",
+    "full_cmd": "bash scripts/test-all.sh",
+    "output_file": ".test-results.txt",
+    "file_patterns": ["tests/**/*.sh"]
+  },
+
+  "dev_server": {
+    "cmd": "",
+    "port_script": "",
+    "main_repo_path": "/workspaces/zskills"
+  },
+
+  "ui": {
+    "file_patterns": "",
+    "auth_bypass": ""
+  },
+
+  "ci": {
+    "auto_fix": true,
+    "max_fix_attempts": 2
+  }
+}
