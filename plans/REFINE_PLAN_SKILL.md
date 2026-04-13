@@ -1,7 +1,7 @@
 ---
 title: /refine-plan Skill
 created: 2026-04-13
-status: active
+status: complete
 ---
 
 # Plan: /refine-plan Skill
@@ -14,8 +14,8 @@ Create the `/refine-plan` skill -- a lightweight adversarial review scoped to th
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 -- Write skills/refine-plan/SKILL.md | ⬚ | | Complete skill definition |
-| 2 -- Install + Verify | ⬚ | | Sync to .claude/skills/, test against a plan |
+| 1 -- Write skills/refine-plan/SKILL.md | ✅ Done | `2489320` | 405-line skill definition |
+| 2 -- Install + Verify | ✅ Done | `2c4abf5` | Installed, structural verification passed |
 
 ---
 
