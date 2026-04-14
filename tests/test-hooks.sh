@@ -96,8 +96,21 @@ expect_allow "kill 1234 (no -9)" "kill 1234"
 echo ""
 echo "=== Push: block main/master ==="
 
-# These run on main branch, so all pushes should be blocked
-expect_deny "git push (bare, on main)" "git push"
+# The bare push test relies on the CURRENT branch being main (the hook falls
+# back to `git branch --show-current`). Outer env may not be on main (CI runs
+# on PR feature branches), so run it in a controlled temp git repo on main.
+BARE_PUSH_TMP=$(mktemp -d)
+(cd "$BARE_PUSH_TMP" && git init -q -b main 2>/dev/null \
+  || (cd "$BARE_PUSH_TMP" && git init -q && git checkout -b main 2>/dev/null))
+_result=$(cd "$BARE_PUSH_TMP" && echo '{"tool_name":"Bash","tool_input":{"command":"git push"}}' | bash "$HOOK" 2>/dev/null)
+rm -rf "$BARE_PUSH_TMP"
+if [[ "$_result" == *"permissionDecision"*"deny"* ]]; then
+  pass "deny: git push (bare, on main)"
+else
+  fail "deny: git push (bare, on main) — expected deny, got: $_result"
+fi
+
+# Explicit target tests — don't depend on current branch (parser extracts target)
 expect_deny "git push origin main" "git push origin main"
 expect_deny "git push -u origin main" "git push -u origin main"
 
