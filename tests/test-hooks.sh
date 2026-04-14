@@ -169,7 +169,14 @@ teardown_project_test() {
 # Helper: set up a bare remote so git diff @{u}..HEAD works in push tests
 setup_push_remote() {
   TEST_REMOTE=$(mktemp -d)
-  (cd "$TEST_TMPDIR" && git clone --bare "$TEST_TMPDIR" "$TEST_REMOTE" 2>/dev/null && git remote add origin "$TEST_REMOTE" 2>/dev/null && git fetch origin 2>/dev/null && git branch -u origin/master 2>/dev/null)
+  # Detect the actual branch name (master vs main depending on git config).
+  # Hardcoding origin/master broke when init.defaultBranch=main was set in CI.
+  (cd "$TEST_TMPDIR" && \
+   git clone --bare "$TEST_TMPDIR" "$TEST_REMOTE" 2>/dev/null && \
+   git remote add origin "$TEST_REMOTE" 2>/dev/null && \
+   git fetch origin 2>/dev/null && \
+   _CB=$(git branch --show-current 2>/dev/null) && \
+   git branch -u "origin/$_CB" 2>/dev/null)
 }
 
 expect_project_deny() {
