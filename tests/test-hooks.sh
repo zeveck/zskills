@@ -863,6 +863,35 @@ else
   fail "land-phase.sh: status:full rejection — rc=$LAND_RC, output: $LAND_OUTPUT"
 fi
 
+# Test: removes known pipeline artifacts (.test-baseline.txt, etc.) before worktree removal
+# Regression test for the bug where .test-baseline.txt blocked worktree removal.
+# Setup a fake worktree with all the artifacts; verify the script removes them and
+# DOESN'T fail on any of them. Worktree removal will still fail (it's not a real
+# git worktree), but the .landed marker should survive for retry.
+LAND_TMPDIR=$(mktemp -d)
+printf 'status: landed\ndate: 2026-01-01\n' > "$LAND_TMPDIR/.landed"
+printf 'baseline output\n' > "$LAND_TMPDIR/.test-baseline.txt"
+printf 'test results\n' > "$LAND_TMPDIR/.test-results.txt"
+printf 'purpose\n' > "$LAND_TMPDIR/.worktreepurpose"
+printf 'pipeline-id\n' > "$LAND_TMPDIR/.zskills-tracked"
+LAND_OUTPUT=$(bash "$LAND_SCRIPT" "$LAND_TMPDIR" 2>&1)
+LAND_RC=$?
+# Expect: script tried to remove the artifacts, then git worktree remove failed
+# (not a real worktree). .landed should survive for retry. Other artifacts should be gone.
+ARTIFACTS_GONE=0
+[ ! -f "$LAND_TMPDIR/.test-baseline.txt" ] && ARTIFACTS_GONE=$((ARTIFACTS_GONE+1))
+[ ! -f "$LAND_TMPDIR/.test-results.txt" ] && ARTIFACTS_GONE=$((ARTIFACTS_GONE+1))
+[ ! -f "$LAND_TMPDIR/.worktreepurpose" ] && ARTIFACTS_GONE=$((ARTIFACTS_GONE+1))
+[ ! -f "$LAND_TMPDIR/.zskills-tracked" ] && ARTIFACTS_GONE=$((ARTIFACTS_GONE+1))
+MARKER_PRESERVED=0
+[ -f "$LAND_TMPDIR/.landed" ] && MARKER_PRESERVED=1
+rm -rf "$LAND_TMPDIR"
+if [ "$ARTIFACTS_GONE" -eq 4 ] && [ "$MARKER_PRESERVED" -eq 1 ]; then
+  pass "land-phase.sh: removes artifacts (incl. .test-baseline.txt) but preserves .landed on failure"
+else
+  fail "land-phase.sh: artifacts cleanup — gone=$ARTIFACTS_GONE/4, marker=$MARKER_PRESERVED, output: $LAND_OUTPUT"
+fi
+
 echo ""
 echo "=== PR mode tests ==="
 

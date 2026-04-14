@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run hook tests
+        run: bash tests/test-hooks.sh
+
+      - name: Bash syntax check on hooks and scripts
+        run: |
+          for f in hooks/*.sh hooks/*.template scripts/*.sh; do
+            [ -f "$f" ] || continue
+            echo "Checking: $f"
+            bash -n "$f" || exit 1
+          done
+
+      - name: Verify installed skill copies match source
+        run: |
+          drift=0
+          for src in skills/*/SKILL.md; do
+            name=$(basename "$(dirname "$src")")
+            installed=".claude/skills/$name/SKILL.md"
+            if [ -f "$installed" ]; then
+              if ! diff -q "$src" "$installed" >/dev/null; then
+                echo "DRIFT: $installed differs from $src"
+                drift=1
+              fi
+            fi
+          done
+          [ "$drift" -eq 0 ] || exit 1
+
+      - name: Check for stdin bash-ism regression
+        run: |
+          # Regression: $(</dev/stdin) fails silently in the hook context.
+          # Use $(cat) instead. See commit 33f987b for history.
+          if grep -rn '\$(</dev/stdin)' hooks/ .claude/hooks/ 2>/dev/null; then
+            echo "ERROR: \$(</dev/stdin) found — use \$(cat) instead"
+            exit 1
+          fi
+          echo "No stdin bash-ism found"
