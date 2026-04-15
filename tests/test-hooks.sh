@@ -47,9 +47,38 @@ expect_allow() {
 
 echo "=== Hook deny patterns ==="
 
-# 1. git stash drop / clear
+# 1. git stash drop / clear — destroys stashed work
 expect_deny "git stash drop" "git stash drop"
 expect_deny "git stash clear" "git stash clear"
+
+# 1b. git stash that CREATES a stash (modifies working tree) — counterfactual
+# testing pattern the CLAUDE.md rule bans; concrete past failure was a
+# pre-commit reviewer unstaging caller's staged files via stash-pop.
+expect_deny "git stash (bare)" "git stash"
+expect_deny "git stash -u" "git stash -u"
+expect_deny "git stash -u -m msg" "git stash -u -m pre-check-stash"
+expect_deny "git stash push -m" "git stash push -m something"
+expect_deny "git stash save" "git stash save old-style-label"
+# Read / recovery operations stay allowed
+expect_allow "git stash apply" "git stash apply"
+expect_allow "git stash list" "git stash list"
+expect_allow "git stash show" "git stash show"
+expect_allow "git stash pop" "git stash pop"
+# git stash create and store operate on the object db, not the working tree
+expect_allow "git stash create" "git stash create"
+
+# 1c. Overmatch-prevention: text that MENTIONS stash but isn't invoking it.
+# These broke before command-boundary gating — hook matched on any substring
+# containing "git stash" (commit messages, grep args, echo/printf content,
+# even the hook's own error message output).
+expect_allow "commit msg w/ stash text" "git commit -m msg-about-git-stash-push"
+expect_allow "echo w/ stash text" "echo git-stash-push-blocked"
+expect_allow "grep stash in file" "grep stash file.md"
+expect_allow "printf w/ stash text" "printf %s git-stash-push"
+
+# 1d. Command-boundary matches: real invocations after shell separators.
+expect_deny "&& git stash" "cd foo && git stash"
+expect_deny "; git stash" "echo ok; git stash"
 
 # 2. git checkout -- file
 expect_deny "git checkout -- file" "git checkout -- file.js"
@@ -89,7 +118,7 @@ expect_allow "git status" "git status"
 expect_allow "git log --oneline" "git log --oneline"
 expect_allow "git add file.js" "git add file.js"
 expect_allow "git commit -m msg" "git commit -m \"msg\""
-expect_allow "git stash (no drop/clear)" "git stash"
+# (bare git stash moved to deny list — see above)
 expect_allow "rm file.js (no -rf)" "rm file.js"
 expect_allow "kill 1234 (no -9)" "kill 1234"
 

@@ -181,6 +181,16 @@ For every file classified as "related":
    you have selection bias. A fresh agent catches files you missed or
    included by mistake.
 
+   **The reviewer is READ-ONLY.** Include this verbatim in the dispatch prompt:
+
+   > You are read-only. Allowed: Read files, run read-only git (`diff`, `log`,
+   > `show`, `show-ref`, `ls-files`, `ls-remote`, `status`), run existing
+   > tests. FORBIDDEN: `git stash` (push/-u/save/bare), `checkout`, `restore`,
+   > `reset`, `add`, `rm`, `commit`, editing files, creating worktrees. For
+   > pre-fix behavior, use `git show <commit>:<file>` — don't modify reality.
+   > (Past failure: reviewer ran `git stash -u && test && git stash pop`; the
+   > pop silently unstaged the caller's staged files.)
+
    If the agent raises concerns: **STOP.** Report the concerns to the user.
    Do not commit until concerns are resolved.
 
@@ -328,33 +338,23 @@ This is for landing worktree work onto main via cherry-pick.
    ```
    Present the list to the user for approval.
 
-2. **Switch to main repo and protect uncommitted work:**
+2. **Switch to main repo and inventory:**
    ```bash
    cd <main-repo-path>
-   ```
-   Check for uncommitted changes or untracked files:
-   ```bash
    git status -s
-   git status -s | grep '^??'
    ```
-   If any exist:
-   ```bash
-   git stash -u -m "pre-cherry-pick stash from /commit land"
-   ```
+   Do NOT stash — it can silently merge or lose other sessions' work. Let
+   git's overlap detection handle it in step 3.
 
-3. **Cherry-pick approved commits:**
+3. **Cherry-pick approved commits (try-without-stash):**
    ```bash
    git cherry-pick <commit-hash>
    ```
-   - One at a time. Verify each succeeds before the next.
-   - If a conflict occurs: STOP. Report the conflict to the user. Do NOT
-     force-resolve, skip, or abort without asking.
+   One at a time. On any refusal or conflict: **STOP** and report to the
+   user. Do not force-resolve, stash, or `--abort` without asking — the
+   conflict state preserves evidence.
 
-4. **Restore stash if one was created:**
-   ```bash
-   git stash pop
-   ```
-   If pop conflicts, tell the user.
+4. (No stash restore — we never stashed.)
 
 5. **Run tests after cherry-picks land:**
    ```bash
@@ -386,13 +386,13 @@ This is for landing worktree work onto main via cherry-pick.
 
 - **NEVER use `git add .` or `git add -A`** — stage files by name only.
 - **NEVER touch unrelated changes** — other agents may have work in progress.
-  Do not `git checkout --`, `git restore`, `git stash` (without `-u`), or
-  otherwise discard changes you didn't make.
+  Do not `git checkout --`, `git restore`, `git reset`, or otherwise discard
+  changes you didn't make.
 - **NEVER amend after hook failure** — create a new commit instead.
 - **NEVER force-push to main/master** — warn and ask.
 - **NEVER push without the `push` argument** — commit only by default.
-- **Protect untracked files** — before stash/cherry-pick, inventory untracked
-  files (`git status -s | grep '^??'`). Use `git stash -u` not `git stash`.
+- **Do NOT stash** — hook blocks `git stash push/-u/save/bare`. For
+  cherry-pick flows, use the try-without-stash pattern (Phase 7 step 3).
 - **If unsure whether a file is yours: ask.** The cost of asking is low. The
   cost of committing or discarding someone else's work is high.
 - **Include `.claude/logs/`** — session logs should be committed alongside

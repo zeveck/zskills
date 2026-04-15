@@ -19,15 +19,43 @@ if [[ "$INPUT" != *'"tool_name":"Bash"'* ]] && [[ "$INPUT" != *'"tool_name": "Ba
   exit 0
 fi
 
+# Extract the command field from the tool_input JSON. Without this, the
+# hook's regex checks match against the whole JSON — including commit
+# messages, echo/printf content, heredocs — any text that mentions a
+# forbidden pattern. Extracting the command first scopes matching to the
+# actual shell command. (Same pattern as block-unsafe-project.sh.)
+COMMAND=$(echo "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' | sed 's/\\"/"/g')
+# If extraction fails (malformed JSON), fall back to scanning $INPUT so the
+# hook remains defensive; no false-allows.
+[ -z "$COMMAND" ] && COMMAND="$INPUT"
+
 # Block patterns — each with a reason
 block_with_reason() {
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}' "$1"
   exit 0
 }
 
-# git stash drop / git stash clear — destroys stashed work permanently
-if [[ "$INPUT" =~ git[[:space:]]+stash[[:space:]]+(drop|clear) ]]; then
+# git stash — command-boundary matching only. A bare `git[[:space:]]+stash`
+# match (anywhere in the command) overmatches on quoted strings (commit
+# messages, echo/printf/grep args that mention stash) and on the hook's own
+# error messages when they're ever echo'd. Gating on command-start or shell
+# separator (;, &, &&, ||, |, newline, backtick, $()) keeps the match scoped
+# to ACTUAL stash invocations.
+#
+# Allowed subcommands: apply, list, show, pop, create, store, branch (read
+# and recovery — never modify the working tree).
+# Destructive: drop, clear — block (prior behavior).
+# Create-stash: push, save, -u, bare — block (CLAUDE.md rule).
+#
+# Past failure: a /commit pre-commit reviewer ran `stash -u && test && stash
+# pop`; the pop silently unstaged the caller's staged files.
+STASH_BOUNDARY='(^|[;&|`(]|&&|\|\||\$\()[[:space:]]*git[[:space:]]+stash'
+STASH_ALLOW_SUB="${STASH_BOUNDARY}[[:space:]]+(apply|list|show|pop|create|store|branch)([[:space:]]|\\\"|'|\\\\|\||;|\$)"
+STASH_DESTRUCTIVE="${STASH_BOUNDARY}[[:space:]]+(drop|clear)"
+if [[ "$COMMAND" =~ $STASH_DESTRUCTIVE ]]; then
   block_with_reason "BLOCKED: git stash drop/clear destroys stashed work permanently (including untracked files saved with -u). If you need to drop a stash, ask the user to do it manually."
+elif [[ "$COMMAND" =~ $STASH_BOUNDARY ]] && [[ ! "$COMMAND" =~ $STASH_ALLOW_SUB ]]; then
+  block_with_reason "BLOCKED: git-stash write subcommand forbidden (modifies working tree). Allowed read/recovery: apply, list, show, pop. For cherry-pick protection, let git refuse on overlap."
 fi
 
 # git checkout -- (any file or blanket) — discards uncommitted changes permanently
