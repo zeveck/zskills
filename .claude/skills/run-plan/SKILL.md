@@ -1443,6 +1443,25 @@ Before ANY cherry-pick to main, verify ALL of these. If any fails, STOP.
 3. In `finish` mode: cross-phase `/verify-changes worktree` returned clean
 4. If UI-touching phases: playwright-cli agent ran and produced screenshots
 5. If UI-touching phases: report has `### User Verification` with `[ ]` items
+6. `/verify-changes` Scope Assessment — grep the verify report for the
+   scope-violation flag. If found, STOP.
+
+   ```bash
+   VERIFY_REPORT="reports/verify-worktree-$(basename "$WORKTREE_PATH").md"
+   if [ -f "$VERIFY_REPORT" ] && grep -q "⚠️ Flag" "$VERIFY_REPORT"; then
+     echo "HALTED: /verify-changes flagged scope violations in $VERIFY_REPORT." >&2
+     echo "Review the Scope Assessment section, fix the diff, re-verify, and re-run." >&2
+     # Invoke Failure Protocol — kill cron, restore working tree, write
+     # failure to plan report, alert user. See "Failure Protocol" section
+     # for exact steps.
+     exit 1
+   fi
+   ```
+
+   For delegate-mode verification (runs on main), the dispatched
+   `/verify-changes` invocation may have used a different scope
+   (`branch` or `worktree`). Record the report path in a variable when
+   dispatching and reuse that variable here for the halt check.
 
 - **Without `auto`:** Phase complete. Output:
   > Phase complete. Report written to `reports/plan-{slug}.md`.

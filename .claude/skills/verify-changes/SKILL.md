@@ -88,6 +88,34 @@ based on session recall.
 
 Examples: `/verify-changes`, `/verify-changes worktree`, `/verify-changes last 3`
 
+Cron-fired top-level example (final cross-branch verification at the end of a
+/research-and-go pipeline):
+
+`"Run /verify-changes branch tracking-id=meta-add-dark-mode"`
+
+Parses as `SCOPE=branch`, `TRACKING_ID=meta-add-dark-mode`, and
+on successful completion writes
+`.zskills/tracking/fulfilled.verify-changes.final.meta-add-dark-mode`,
+matching the `requires.verify-changes.final.meta-add-dark-mode`
+lockdown marker created by `/research-and-go` Step 0.
+
+### Parsing $ARGUMENTS
+
+```bash
+SCOPE=""
+TRACKING_ID=""
+for tok in $ARGUMENTS; do
+  case "$tok" in
+    tracking-id=*) TRACKING_ID="${tok#tracking-id=}" ;;
+    worktree|branch|last) SCOPE="$tok" ;;
+    [0-9]*) [ "$SCOPE" = "last" ] && SCOPE="last $tok" ;;
+  esac
+done
+```
+
+Lets `/verify-changes branch tracking-id=X` parse correctly when fired as a
+cron-fired top-level turn.
+
 ## Tracking Fulfillment
 
 On entry, if a tracking ID was passed by the parent skill, create the
@@ -95,11 +123,18 @@ fulfillment marker in the MAIN repo:
 ```bash
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 mkdir -p "$MAIN_ROOT/.zskills/tracking"
+MARKER_STEM="verify-changes"
+[ "$SCOPE" = "branch" ] && MARKER_STEM="verify-changes.final"
 printf 'skill: verify-changes\nid: %s\nscope: %s\nstatus: started\ndate: %s\n' \
   "$TRACKING_ID" "$SCOPE" "$(TZ=America/New_York date -Iseconds)" \
-  > "$MAIN_ROOT/.zskills/tracking/fulfilled.verify-changes.$TRACKING_ID"
+  > "$MAIN_ROOT/.zskills/tracking/fulfilled.$MARKER_STEM.$TRACKING_ID"
 ```
 If no tracking ID was passed (standalone invocation), skip tracking.
+
+When `$SCOPE = "branch"` this writes to
+`fulfilled.verify-changes.final.<id>` — matching the
+`requires.verify-changes.final.<id>` lockdown marker created by
+`/research-and-go` Step 0.
 
 ## Phase 1 — Inventory Changes
 
@@ -121,6 +156,13 @@ If no tracking ID was passed (standalone invocation), skip tracking.
    - Does the change look correct? (logic errors, edge cases, off-by-ones)
    - Any security concerns? (XSS, injection, unsanitized input)
    - Any CLAUDE.md rule violations? (weakened tests, external deps, etc.)
+   - **Scope vs plan:** does this change stay within the plan's
+     stated goal? Flag any file touched that is not mentioned by
+     the plan's Work Items or Acceptance Criteria, AND any
+     deletion/rewrite of features unrelated to the plan's
+     purpose. (Regression guard: commit faab84b silently
+     deleted unrelated features because no reviewer asked
+     this question.)
 
 4. **Produce a change inventory table:**
 
@@ -386,6 +428,28 @@ Legend: ✅ verified, ⚠️ partial, ❌ failed, ➖ not applicable, [ ] not ye
 |------|--------|---------|
 ```
 
+**Scope Assessment** — mandatory in `branch` scope (whole-pipeline
+cumulative diff), recommended in other scopes. Insert immediately after
+"Changes Reviewed":
+
+```markdown
+## Scope Assessment
+
+**Plan goal:** {one-line quote from plan's Goal section}
+
+| File | In-scope? | Rationale |
+|------|-----------|-----------|
+| src/foo.js | Yes | Listed in Work Item #2 |
+| src/bar.js | ⚠️ Flag | Deletes `bar()` — not mentioned in plan |
+
+If any row is flagged, verification is **NOT** clean — fix or
+justify before signing off.
+```
+
+Regression guard: commit `faab84b` silently deleted features unrelated to
+its stated plan because no reviewer asked this question. `/run-plan` Phase 6
+greps for `⚠️ Flag` in this section and halts landing if found.
+
 **Domain-grouped sections** — group by concern (UI/UX, Codegen, etc.),
 NOT by workflow state. Each section uses a single-checkbox checklist
 (no summary table + detail card dual-checkbox pattern):
@@ -470,9 +534,11 @@ MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
   > "$MAIN_ROOT/.zskills/tracking/step.verify-changes.$TRACKING_ID.complete"
 
+MARKER_STEM="verify-changes"
+[ "$SCOPE" = "branch" ] && MARKER_STEM="verify-changes.final"
 printf 'skill: verify-changes\nid: %s\nscope: %s\nstatus: complete\ndate: %s\n' \
   "$TRACKING_ID" "$SCOPE" "$(TZ=America/New_York date -Iseconds)" \
-  > "$MAIN_ROOT/.zskills/tracking/fulfilled.verify-changes.$TRACKING_ID"
+  > "$MAIN_ROOT/.zskills/tracking/fulfilled.$MARKER_STEM.$TRACKING_ID"
 ```
 
 ## Key Rules
