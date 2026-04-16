@@ -25,3 +25,26 @@
 - All acceptance criteria greps: PASSED
 - Mirror sync: PASSED (diff -q clean)
 - Scope discipline: PASSED (only skills/run-plan/SKILL.md + mirror touched; 602 insertions, 16 deletions)
+
+## Phase — B Cross-branch Final Verify in /research-and-go
+
+**Plan:** plans/RESTORE_CHUNKED_EXECUTION.md
+**Status:** Completed (verified)
+**Commit:** e4bc50a
+
+### Work Items
+| # | Item | Status |
+|---|------|--------|
+| 1 | Pre-decide meta-plan path at Step 0 | Done |
+| 2 | Write requires.verify-changes.final marker | Done |
+| 3 | Pass output to /research-and-plan | Done |
+| 4 | Drop every 4h from Step 2 cron | Done |
+| 5 | Remove auto-cleanup from Step 3 | Done |
+| 6 | Add Step 3 final-verify prose | Done |
+| 7 | Mirror to .claude/skills/ | Done |
+
+### Verification
+- Test suite: PASSED (163/163)
+- All acceptance criteria: PASSED
+- Mirror sync: PASSED
+- Scope discipline: PASSED (2 files only)
