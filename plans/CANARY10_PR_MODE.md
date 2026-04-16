@@ -1,7 +1,7 @@
 ---
 title: Canary 10 — PR Mode End-to-End
 created: 2026-04-16
-status: active
+status: complete
 ---
 
 # Plan: Canary 10 — PR Mode End-to-End
@@ -37,8 +37,8 @@ confirmed they're happy to run this manually.
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 -- Create canary10 file | ⬜ | | Trivial file create (PR mode) |
-| 2 -- Append second line   | ⬜ | | Trivial append (PR mode)      |
+| 1 -- Create canary10 file | ✅ Done | `bbec8c3` | PR-mode (landed via squash) |
+| 2 -- Append second line   | ✅ Done | `b5ea9be` | PR-mode (landed via squash) |
 
 ## Phase 1 -- Create canary10 file
 
