@@ -843,6 +843,22 @@ Critical: the verification agent is NOT the implementing agent. Fresh eyes
 catch implementer blindspots — deferred hard parts, missing tests, stubs,
 shortcuts.
 
+### Dispatch protocol
+
+**Check your tool list.** If `Agent` (or `Task`) is in your tool list,
+you are at top level — dispatch a fresh verification subagent per the
+protocol below. The implementation subagent (in its worktree) and the
+verification subagent are sibling subagents of you, the top-level
+orchestrator. The verifier has independent context from the implementer.
+
+**If you do NOT have the `Agent` tool**, you are running as a subagent
+yourself (Claude Code subagents have no Agent tool, by Anthropic's
+design at https://code.claude.com/docs/en/sub-agents). Run `/verify-changes
+worktree` inline in your current context — the verifier subagent (you)
+is fresh relative to the implementer subagent that ran in a separate
+context. This fallback is mostly defensive since /run-plan typically runs
+at top level.
+
 **Agent timeout: 45 minutes.** Verification should take 15-30 minutes —
 reading diffs, running tests, checking acceptance criteria. If a verification
 agent hasn't returned after 45 minutes, it is thrashing (likely on test

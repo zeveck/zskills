@@ -19,14 +19,48 @@ results with next-step recommendations.
 **Ultrathink throughout.** Use careful, thorough reasoning at every step. Read the
 code, understand what changed and why, verify correctness — don't just skim.
 
-**NEVER verify from memory. Dispatch fresh agents.** You may have just written
-the code being verified — that's exactly why YOU should not be the verifier.
-Dispatch agents to do the actual verification work. Fresh agents have no
-memory of the implementation and will catch things you'd miss because you
+**NEVER verify from memory. Read actual diffs, run actual tests.**
+You may have just written the code being verified — that's exactly why
+YOU should not be the verifier without checking the artifacts. Dispatch
+agents to do the actual verification work. Fresh agents have no memory
+of the implementation and will catch things you'd miss because you
 "know" what the code does.
 
+### Dispatch protocol
+
+**Check your tool list first.** Whether you can dispatch fresh sub-agents
+for verification depends on whether you have the `Agent` (or `Task`) tool:
+
+- **If `Agent` is in your tool list** (you are running at the top level —
+  the user invoked you directly, or a parent skill cron-fired you in
+  chunked mode), dispatch fresh sub-agents per the protocol below. Each
+  sub-agent is a sibling of any other sub-agent dispatched by you, and
+  they have independent contexts. This is the multi-agent verification
+  mode and gives the strongest fresh-eyes guarantees.
+
+- **If `Agent` is NOT in your tool list** (you are running as a dispatched
+  subagent yourself — Claude Code subagents do not have the Agent/Task
+  tool, by Anthropic's design at https://code.claude.com/docs/en/sub-agents),
+  execute the verification workflow inline in your current context. Be
+  explicit about freshness:
+  - You ARE fresh relative to your dispatcher IF your dispatcher is a
+    top-level orchestrator and you were dispatched as a separate subagent
+    (typical case after chunked `/run-plan` dispatches you for
+    verification — you have no memory of the implementation work because
+    it happened in a different subagent).
+  - You are NOT fresh relative to your dispatcher if you were Skill-loaded
+    inline (your dispatcher's context IS your context, including any
+    implementation work).
+  - Document the freshness mode in your verification report so the user
+    knows what kind of verification they got: "multi-agent" (you had
+    dispatch and used it), "single-context fresh-subagent" (you didn't
+    have dispatch but you were a fresh subagent), or "inline self-review"
+    (you were Skill-loaded into the implementer's context — limited
+    assurance, flag for the user).
+
 At minimum, dispatch an agent for Phase 1-2 (read diffs, audit coverage)
-and run tests yourself (Phase 3). For complex changes, dispatch separate
+and run tests yourself (Phase 3) when dispatch is available. Run
+everything inline when it isn't. For complex changes, dispatch separate
 agents for different verification concerns (diff review, test coverage,
 manual testing).
 

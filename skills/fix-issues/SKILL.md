@@ -827,6 +827,23 @@ printf 'skill: verify-changes\nparent: fix-issues\nmode: sprint\ndate: %s\n' \
   > "$MAIN_ROOT/.zskills/tracking/requires.verify-changes.sprint"
 ```
 
+### Dispatch protocol
+
+**Check your tool list.** If `Agent` (or `Task`) is in your tool list,
+you are at top level — dispatch fresh verification subagents per the
+protocol below. The implementation subagents (in their per-issue
+worktrees) and the verification subagent are sibling subagents of you,
+the top-level orchestrator. The verifier has no memory of what the
+implementer did because they're separate contexts.
+
+**If you do NOT have the `Agent` tool**, you are running as a subagent
+yourself (Claude Code subagents have no Agent tool, by Anthropic's
+design at https://code.claude.com/docs/en/sub-agents). Run `/verify-changes
+worktree` inline in your current context, once per worktree. This is
+single-context inline verification — flag in the report whether you
+were fresh relative to the implementer or not. This fallback is mostly
+defensive since /fix-issues typically runs at top level.
+
 **Before dispatching any verification Agent:** check `agents.min_model` in
 `.claude/zskills-config.json`. If set, use that model or higher (ordinal:
 haiku=1 < sonnet=2 < opus=3). Never dispatch with a lower-ordinal model than
