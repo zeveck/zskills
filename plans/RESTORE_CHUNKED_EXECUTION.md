@@ -181,7 +181,7 @@ the reconciliation points above.
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| A -- Chunked finish auto in /run-plan | ⏳ Pending | | Step 0 + Phase 5b gate + Phase 5c (chunked transition only) |
+| A -- Chunked finish auto in /run-plan | 🟡 In Progress | | Step 0 + Phase 5b gate + Phase 5c (chunked transition only) |
 | B -- Cross-branch final verify in /research-and-go | ⏳ Pending | | Pre-decide path; write marker at Step 0 |
 | C -- Tool-list-aware dispatch in 4 skills | ⏳ Pending | | run-plan, fix-issues, verify-changes, add-block |
 | D -- /research-and-plan prohibition explanation | ⏳ Pending | | ~38-line block restoration |
