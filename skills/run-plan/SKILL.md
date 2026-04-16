@@ -432,6 +432,13 @@ Before parsing, check for stale state from a previous failed run:
    printf 'skill: run-plan\nid: %s\nplan: %s\nphase: %s\nstatus: started\ndate: %s\n' \
      "$TRACKING_ID" "$PLAN_FILE" "$PHASE" "$(TZ=America/New_York date -Iseconds)" \
      > "$MAIN_ROOT/.zskills/tracking/fulfilled.run-plan.$TRACKING_ID"
+
+   # Lock down verification requirement IMMEDIATELY (was Phase 2,
+   # now skill entry — ensures hook blocks landing even if Phase
+   # 2/3 are skipped via error path).
+   printf 'skill: verify-changes\nparent: run-plan\nid: %s\ndate: %s\n' \
+     "$TRACKING_ID" "$(TZ=America/New_York date -Iseconds)" \
+     > "$MAIN_ROOT/.zskills/tracking/requires.verify-changes.$TRACKING_ID"
    ```
 
 9. **Classify UI impact from the plan text.** Scan the phase description
@@ -817,20 +824,17 @@ printf 'phase: %s\ncompleted: %s\n' "$PHASE" "$(TZ=America/New_York date -Isecon
 
 ### Pre-verification tracking
 
-Before dispatching the verification agent, create a delegation requirement
-marker so the hook can enforce that verification actually runs:
-```bash
-MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
-printf 'skill: verify-changes\nparent: run-plan\nid: %s\ndate: %s\n' \
-  "$TRACKING_ID" "$(TZ=America/New_York date -Iseconds)" \
-  > "$MAIN_ROOT/.zskills/tracking/requires.verify-changes.$TRACKING_ID"
-```
-> **Note:** This is the per-pipeline verification requirement
-> (`requires.verify-changes.$TRACKING_ID`). It is **distinct** from
+The `requires.verify-changes.$TRACKING_ID` marker was created at skill
+entry (Phase 1 step 8). The hook is enforcing it. Pass the tracking ID to
+the verification agent so it can create its own fulfillment marker.
+
+> **Note:** The per-pipeline verification requirement
+> (`requires.verify-changes.$TRACKING_ID`) is **distinct** from
 > `requires.verify-changes.final.<META_PLAN_SLUG>` which is a cross-branch
 > final verification marker with a different lifecycle — created by
 > `/research-and-go` Step 0, fulfilled after ALL sub-plans complete. Phase A
 > does not modify or consolidate this marker; the two coexist independently.
+
 Pass the tracking ID to the verification agent in the dispatch prompt so it
 can create its own fulfillment marker:
 > Your tracking ID is `$TRACKING_ID`. On entry, create
