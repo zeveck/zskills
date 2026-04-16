@@ -1,5 +1,24 @@
 # Plan Report — Route ephemeral test outputs to /tmp
 
+## Phase — 3 Hook message + land-phase.sh + regression test (landed)
+
+**Plan:** plans/EPHEMERAL_TO_TMP.md
+**Status:** Landed on main
+**Commit on main:** 66d9138
+
+### Work Items
+| # | Item | Status |
+|---|------|--------|
+| 1 | Hook error message → TEST_OUT idiom | Done |
+| 2 | land-phase.sh /tmp cleanup block | Done (non-fatal, after EPHEMERAL_FILES loop) |
+| 3 | tests/test-hooks.sh extended compound assertion | Done (pass count unchanged) |
+| 4 | Hook mirror synced | Done |
+
+### Verification
+- Scope: `✓ Clean` — 4 files
+- Tests: 235/235
+- EPHEMERAL_FILES array preserved (contract canary)
+
 ## Phase — 2 Update skill recipes + mirrors (landed)
 
 **Plan:** plans/EPHEMERAL_TO_TMP.md
