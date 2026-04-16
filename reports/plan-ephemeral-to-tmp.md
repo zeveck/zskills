@@ -1,5 +1,25 @@
 # Plan Report — Route ephemeral test outputs to /tmp
 
+## Phase — 4 Remove wildcard .gitignore + .claude/logs (landed)
+
+**Plan:** plans/EPHEMERAL_TO_TMP.md
+**Status:** Landed on main — **PLAN COMPLETE**
+**Commit on main:** 86ca2e7
+
+### Work Items
+| # | Item | Status |
+|---|------|--------|
+| 1 | Pre-gate filesystem scan (find, not git status) | PASS — zero leaks |
+| 2 | Remove 412b097 wildcard .gitignore (9 lines) | Done |
+| 3 | Add .claude/logs/ to .gitignore | Done (line 11, trailing slash) |
+| 4 | Final acceptance grep | PASS — all 40 hits intentional |
+| 5 | Post-edit clean-tree | PASS — no .test-* in git status after test run |
+
+### Verification
+- Scope: `✓ Clean` — only `.gitignore` (1 file)
+- Tests: 235/235
+- Stale artifacts cleaned: `.test-results.txt` (orchestrator), `.test-results-integration.txt` (Apr 12), `.review-diff.txt` (Apr 13) — all previously hidden by wildcards
+
 ## Phase — 3 Hook message + land-phase.sh + regression test (landed)
 
 **Plan:** plans/EPHEMERAL_TO_TMP.md
