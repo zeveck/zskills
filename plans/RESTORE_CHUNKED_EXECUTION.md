@@ -187,7 +187,7 @@ the reconciliation points above.
 | D -- /research-and-plan prohibition explanation | ✅ Done | `3f6e9c9` | Full ~38-line section restored | | | ~38-line block restoration |
 | E -- Early requires-lockdown in /run-plan | ✅ Done | `f7f3475` | Marker at entry | | | Move marker creation to Phase 1 step 8 |
 | H -- Scope-vs-plan judgment in /verify-changes | ✅ Done | `8e5634d` | Scope vs plan Q + Scope Assessment + halt-on-flag check |
-| G -- Orphaned-reference reconciliation | ⏳ Pending | | 4 sites, mostly zero-diff (after A) |
+| G -- Orphaned-reference reconciliation | ✅ Done | `N/A` | Zero-diff: all 4 sites already accurate post-Phase-A |
 | F -- Invariants test + behavioral canaries | ⏳ Pending | | Static asserts all + behavioral canaries |
 
 ### Dependency graph and execution order

@@ -83,3 +83,26 @@ may mention "⚠️ Flag" in prose (checklist descriptions), not just in the
 Scope Assessment table. Future Phase G and F verify reports could spuriously
 trigger the halt. Consider narrowing the grep to `| ⚠️ Flag |` (table-cell
 form) in a follow-up if G/F hit false-positive halts.
+
+## Phase — G Orphaned-Reference Reconciliation
+
+**Plan:** plans/RESTORE_CHUNKED_EXECUTION.md
+**Status:** Completed (zero-diff)
+**Commit:** N/A (no code change)
+
+### Work Items
+| # | Site | Current state | Action |
+|---|------|---------------|--------|
+| 1 | `skills/run-plan/SKILL.md:717` | "worktree persists across cron turns for chunked execution" (PR-mode section) | Zero-diff — accurate post-A |
+| 2 | `skills/run-plan/SKILL.md:774` | Same phrase (PR-mode detail) | Zero-diff — accurate post-A |
+| 3 | `plans/EXECUTION_MODES_DESIGN.md:23` | "progress tracking failure across cron turns" (historical rationale for worktrees) | Zero-diff — preserved as historical context |
+| 4 | `plans/EXECUTION_MODES_DESIGN.md:30` | "Persists across cron turns for chunked execution" (PR-mode worktree) | Zero-diff — accurate post-A |
+
+### Verification
+- All 4 sites re-read against reality post-Phase-A (chunked execution restored via Phase 5c + Step 0 + Phase 5b gate).
+- Each reference is accurate; no tightening needed.
+- Test suite: PASSED (163/163).
+- Scope discipline: N/A (no files changed — zero-diff outcome is explicitly acceptable per plan spec).
+
+### Plan spec's advisory line numbers vs reality
+Plan specified lines 673 and 730 in run-plan/SKILL.md; actual matches are at 717 and 774 (drift from prior edits). Content-anchored — accurate.
