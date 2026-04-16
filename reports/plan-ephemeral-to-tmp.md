@@ -1,12 +1,12 @@
 # Plan Report — Route ephemeral test outputs to /tmp
 
-## Phase — 1 Update CLAUDE.md + CLAUDE_TEMPLATE.md with canonical idiom [UNFINALIZED]
+## Phase — 1 Update CLAUDE.md + CLAUDE_TEMPLATE.md with canonical idiom (landed)
 
 **Plan:** plans/EPHEMERAL_TO_TMP.md
-**Status:** Verified in worktree (cherry-pick pending)
-**Worktree:** /tmp/zskills-cp-ephemeral-to-tmp-phase-1
-**Branch:** cp-ephemeral-to-tmp-1
-**Commit on feature branch:** 5bd2b01
+**Status:** Landed on main
+**Worktree:** /tmp/zskills-cp-ephemeral-to-tmp-phase-1 (cleaned up by land-phase.sh)
+**Branch:** cp-ephemeral-to-tmp-1 (deleted)
+**Commit on main:** 56780f9 (cherry-picked from feature-branch 5bd2b01)
 
 ### Work Items
 | # | Item | Status |
@@ -29,6 +29,8 @@
 At phase dispatch, `skills/run-plan/SKILL.md` and its `.claude/skills/run-plan/SKILL.md` mirror were out of sync (commit `7efd93b` forgot to mirror). This failed the `test-skill-invariants.sh` mirror-sync check on main (234/235) and blocked Phase 1's "all green" acceptance criterion. Resolved as a separate housekeeping commit (`058b060`) before the worktree was rebased; no scope creep on the feature branch.
 
 ### Commits in this phase
-- `058b060` — `chore(mirror): re-sync run-plan/SKILL.md mirror (forgotten in 7efd93b)` (housekeeping, on main directly; unblocked Phase 1's test suite)
-- `5bd2b01` — `docs: canonical TEST_OUT idiom in CLAUDE.md + CLAUDE_TEMPLATE.md` (on feature branch, pending cherry-pick)
-- `7d07fea` — `chore: mark EPHEMERAL_TO_TMP phase 1 in progress` (tracker update on main)
+- `058b060` — `chore(mirror): re-sync run-plan/SKILL.md mirror (forgotten in 7efd93b)` (housekeeping on main; unblocked Phase 1's test suite)
+- `7d07fea` — `chore: mark EPHEMERAL_TO_TMP phase 1 in progress` (tracker 🟡 on main)
+- `1111d60` — `docs(reports): EPHEMERAL_TO_TMP phase 1 report (pre-landing)` (report + PLAN_REPORT.md index refresh)
+- `56780f9` — `docs: canonical TEST_OUT idiom in CLAUDE.md + CLAUDE_TEMPLATE.md` (cherry-pick of feature-branch 5bd2b01 to main)
+- Final tracker update to ✅ Done commits separately via run-plan Phase 6 step 9
