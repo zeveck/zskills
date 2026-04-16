@@ -633,13 +633,21 @@ agent hasn't returned after 2 hours, declare it **failed**:
    what each worktree is for, instead of just an opaque agent ID.
 
    **Hygiene constraint — NEVER commit ephemeral pipeline files.** The
-   files `.worktreepurpose`, `.zskills-tracked`, `.landed`, `.test-baseline.txt`,
-   and `.test-results.txt` must stay UNTRACKED throughout the run. Do NOT
-   include them in `git add` when dispatching implementation or
-   verification agents. When staging for a commit, name specific source
-   files explicitly (`git add skills/X.md tests/Y.sh ...`) rather than
-   patterns that could sweep ephemerals in. `scripts/land-phase.sh`
-   expects these files to be untracked and will refuse to clean up a
+   files `.worktreepurpose`, `.zskills-tracked`, and `.landed` are worktree
+   lifecycle markers and must stay UNTRACKED throughout the run.
+
+   Test output lives OUTSIDE the worktree, at `/tmp/zskills-tests/<worktree-
+   basename>/` (see CLAUDE.md). The filenames `.test-results.txt` and
+   `.test-baseline.txt` should NEVER appear in the worktree at all; if they
+   do, a stale writer leaked them, and `scripts/land-phase.sh` treats any
+   git-tracked version as a landing-time error (a canary for contract
+   violations — not a normal-path cleanup).
+
+   Do NOT include any of these files in `git add` when dispatching
+   implementation or verification agents. When staging for a commit, name
+   specific source files explicitly (`git add skills/X.md tests/Y.sh ...`)
+   rather than patterns that could sweep ephemerals in. `scripts/land-phase.sh`
+   expects the lifecycle markers to be untracked and will refuse to clean up a
    worktree that has any of them tracked — a staged-delete left over
    from a commit would block `git worktree remove` and leak zombies.
 
@@ -715,20 +723,28 @@ agent hasn't returned after 2 hours, declare it **failed**:
    > 1. Start a dev server FIRST: `npm start &`
    > 2. Wait for it: `sleep 3`
    > 3. Run tests with output captured to a file:
-   >    `npm run test:all > .test-results.txt 2>&1`
+   >    ```bash
+   >    TEST_OUT="/tmp/zskills-tests/$(basename "$(pwd)")"
+   >    mkdir -p "$TEST_OUT"
+   >    npm run test:all > "$TEST_OUT/.test-results.txt" 2>&1
+   >    ```
    >    **Never pipe** through `| tail`, `| head`, `| grep` — it loses
    >    output and forces re-runs. Capture once, read the file.
    > 4. The dev server must stay running for E2E tests. If source files
    >    changed (they will have — you're implementing), E2E tests FAIL
    >    (not skip) without a dev server.
-   > 5. If tests fail, **read `.test-results.txt`** to find the failures.
+   > 5. If tests fail, **read `"$TEST_OUT/.test-results.txt"`** to find the failures.
    >    Then run ONLY the failing test file to iterate on the fix:
    >    `node --test tests/the-failing-file.test.js`
    >    Do NOT re-run `npm run test:all` to diagnose — that wastes 5
    >    minutes when the single file takes 30 seconds.
    > 6. After fixing, run the single file again to confirm. Then run
-   >    `npm run test:all > .test-results.txt 2>&1` ONE more time as
-   >    the final gate before committing.
+   >    ```bash
+   >    TEST_OUT="/tmp/zskills-tests/$(basename "$(pwd)")"
+   >    mkdir -p "$TEST_OUT"
+   >    npm run test:all > "$TEST_OUT/.test-results.txt" 2>&1
+   >    ```
+   >    ONE more time as the final gate before committing.
    > 7. Max 2 fix attempts at the same error — do not thrash.
    > 8. If a test fails in code you didn't touch, it may be pre-existing.
    >    See `/verify-changes` Phase 3 for the pre-existing failure protocol.
@@ -836,7 +852,9 @@ implementation agent, the orchestrator captures a test baseline in the worktree:
 # Orchestrator captures baseline BEFORE impl agent starts
 cd "$WORKTREE_PATH"
 if [ -n "$FULL_TEST_CMD" ]; then
-  $FULL_TEST_CMD > .test-baseline.txt 2>&1 || true
+  TEST_OUT="/tmp/zskills-tests/$(basename "$WORKTREE_PATH")"
+  mkdir -p "$TEST_OUT"
+  $FULL_TEST_CMD > "$TEST_OUT/.test-baseline.txt" 2>&1 || true
 fi
 ```
 
@@ -925,7 +943,29 @@ If this phase used delegate execution, verification runs on **main**:
 
    Give the verification agent:
    - The **worktree path** from Phase 2 (so it can read files and run tests
-     there via `cd <worktree-path> && npm run test:all`)
+     there). The verifier must run tests via:
+
+     ```bash
+     cd <worktree-path>
+     TEST_OUT="/tmp/zskills-tests/$(basename "<worktree-path>")"
+     mkdir -p "$TEST_OUT"
+     npm run test:all > "$TEST_OUT/.test-results.txt" 2>&1
+     ```
+
+     Note: compute `$TEST_OUT` from the worktree-path LITERAL you were handed,
+     NOT from `$(pwd)` at prompt-entry time — the orchestrator dispatches you
+     without `isolation`, so your initial cwd is the orchestrator's (typically
+     main), and a pre-cd `$(pwd)` would yield the wrong basename and miss the
+     baseline.
+
+     Orchestrator-runtime note: when the orchestrator constructs the verifier
+     prompt, it substitutes the literal string `<worktree-path>` with the
+     actual worktree path BEFORE dispatching. The verifier sees a fully-
+     substituted prompt — no placeholder parsing on its side. Both orchestrator
+     baseline capture (line 811) and verifier `$TEST_OUT` derivation MUST use
+     `basename` of the SAME path literal, so the baseline and the results land
+     in the same `/tmp/zskills-tests/<name>/` bucket.
+
    - The **worktree branch name** (so it can diff against main:
      `git diff main...<branch>`)
    - The **verbatim phase text** from the plan (same text the implementer got)
@@ -934,18 +974,18 @@ If this phase used delegate execution, verification runs on **main**:
      orchestrator with implementer bias.
    - The **work items checklist** — verify each item was actually implemented,
      not stubbed or skipped
-   - The **`.test-baseline.txt` file** captured before implementation started
-     (if `FULL_TEST_CMD` is configured). The verification agent should:
-     - Read `.test-baseline.txt` (baseline captured before implementation)
-     - Compare against `.test-results.txt` (results after running tests now)
+   - The **`"$TEST_OUT/.test-baseline.txt"` file** captured before implementation
+     started (if `FULL_TEST_CMD` is configured). The verification agent should:
+     - Read `"$TEST_OUT/.test-baseline.txt"` (baseline captured before implementation)
+     - Compare against `"$TEST_OUT/.test-results.txt"` (results after running tests now)
      - **New failures** (in results but not in baseline) → regressions, must
        be fixed before the phase can commit
      - **Pre-existing failures** (in both baseline and results) → note in report,
        do not fix (these predate this phase)
      - **Resolved failures** (in baseline but not in results) → note positively
        as improvements
-     - If `.test-baseline.txt` is absent (`FULL_TEST_CMD` not configured), treat
-       all failures as potentially new — report all of them
+     - If `"$TEST_OUT/.test-baseline.txt"` is absent (`FULL_TEST_CMD` not configured),
+       treat all failures as potentially new — report all of them
 
 2. **Additional plan-specific checks** (the verifier checks these against the
    verbatim plan text — not against a summary):
@@ -2037,11 +2077,14 @@ Attempting fix..."
     #      - Environment issue -> may not be fixable, report and stop
     #   2. Make the minimal fix. Do not refactor or improve unrelated code.
     #   3. Run tests locally to verify the fix:
-    #      - If FULL_TEST_CMD is set: "$FULL_TEST_CMD > .test-results.txt 2>&1"
+    #      - If FULL_TEST_CMD is set:
+    #        TEST_OUT="/tmp/zskills-tests/$(basename "$(pwd)")"
+    #        mkdir -p "$TEST_OUT"
+    #        "$FULL_TEST_CMD > "$TEST_OUT/.test-results.txt" 2>&1"
     #      - If FULL_TEST_CMD is empty: look for package.json scripts (npm test),
     #        or test files matching common patterns. If no test command can be
     #        determined, skip local testing and note it in the commit message.
-    #      Read .test-results.txt to check for failures.
+    #      Read "$TEST_OUT/.test-results.txt" to check for failures.
     #   4. If tests pass, commit with message:
     #      "fix: address CI failure -- <short description of what was fixed>"
     #   5. If tests fail on the same error after one fix attempt, STOP.

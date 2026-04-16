@@ -1074,8 +1074,7 @@ printf 'completed: %s\n' "$(TZ=America/New_York date -Iseconds)" \
         grep -v '\.landed\|\.worktreepurpose\|\.test-results\|\.playwright\|node_modules')
 
       if [ -z "$DIRTY" ] && [ -z "$UNTRACKED" ]; then
-        rm -f "<worktree>/.landed" "<worktree>/.worktreepurpose" \
-              "<worktree>/.test-results.txt"
+        rm -f "<worktree>/.landed" "<worktree>/.worktreepurpose"
         git worktree remove "<worktree>"
         git branch -d "<branch>" 2>/dev/null
       else

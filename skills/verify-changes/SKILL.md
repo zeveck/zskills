@@ -205,14 +205,16 @@ For each changed file, verify appropriate tests exist:
 
 1. **Run the full test suite with output captured to a file:**
    ```bash
-   npm run test:all > .test-results.txt 2>&1
+   TEST_OUT="/tmp/zskills-tests/$(basename "$(pwd)")"
+   mkdir -p "$TEST_OUT"
+   npm run test:all > "$TEST_OUT/.test-results.txt" 2>&1
    ```
    **Never pipe** through `| tail`, `| head`, `| grep` — it loses output
-   and forces re-runs. Capture once, then read `.test-results.txt` to find
+   and forces re-runs. Capture once, then read `"$TEST_OUT/.test-results.txt"` to find
    failures. This runs unit tests (~4,000), then auto-detects whether the
    dev server and cargo are available for E2E and codegen tests.
 
-2. **If tests fail, diagnose with targeted runs.** Read `.test-results.txt`
+2. **If tests fail, diagnose with targeted runs.** Read `"$TEST_OUT/.test-results.txt"`
    to identify the failing test file, then run ONLY that file:
    ```bash
    node --test tests/the-failing-file.test.js
@@ -232,7 +234,7 @@ For each changed file, verify appropriate tests exist:
 
    b. **Research and file a GitHub issue** (`gh issue create`) with:
       - Title: `Test failure: <test name>`
-      - Verbatim error output from `.test-results.txt`
+      - Verbatim error output from `"$TEST_OUT/.test-results.txt"`
       - The exact `assert.*` line from the test source (read the test code)
       - Reproduction command: `node --test tests/<file>.test.js`
       - `git log` evidence that the failure predates current changes
@@ -243,7 +245,12 @@ For each changed file, verify appropriate tests exist:
       - Commit the skip and the issue number together
 
    d. **Re-run the failing test file** to confirm the skip works, then
-      run `npm run test:all > .test-results.txt 2>&1` as the final gate.
+      run the final gate:
+      ```bash
+      TEST_OUT="/tmp/zskills-tests/$(basename "$(pwd)")"
+      mkdir -p "$TEST_OUT"
+      npm run test:all > "$TEST_OUT/.test-results.txt" 2>&1
+      ```
 
    e. **Guardrails:**
       - Never skip a test in a file you modified or that tests code you modified
