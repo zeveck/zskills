@@ -27,7 +27,7 @@ The refactor touches:
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 — Update CLAUDE.md + CLAUDE_TEMPLATE.md with canonical idiom | ⬚ | | |
+| 1 — Update CLAUDE.md + CLAUDE_TEMPLATE.md with canonical idiom | 🟡 | | Verified in worktree, cherry-pick pending |
 | 2 — Update skill recipes (run-plan, verify-changes, investigate, fix-issues, update-zskills) + mirrors | ⬚ | | |
 | 3 — Update hook message + land-phase.sh /tmp cleanup + regression test | ⬚ | | |
 | 4 — Pre-gate clean-tree check + remove wildcard .gitignore + gitignore .claude/logs | ⬚ | | |
