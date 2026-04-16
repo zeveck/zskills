@@ -42,9 +42,33 @@ Before starting:
 - `gh auth status` succeeds.
 - Repo settings: auto-merge enabled, squash-merge allowed, branch
   protection permits auto-merge (not requiring up-to-date branch).
-- `/tmp` has room for ~5 worktrees across the run.
+- `/tmp` has room for one worktree at a time (each phase's worktree
+  is cleaned up after its PR merges before the next phase starts).
 - `bash tests/run-all.sh` passes on current main (baseline).
-- Launch as: `/run-plan plans/CANARY_FAILURE_INJECTION.md finish auto pr`.
+
+**Launch — sequential per-phase PRs (intentional, not `finish auto pr`):**
+
+```
+/run-plan plans/CANARY_FAILURE_INJECTION.md 1 auto pr
+# wait for PR to merge, then:
+git pull --ff-only origin main
+/run-plan plans/CANARY_FAILURE_INJECTION.md 2 auto pr
+# ... repeat for phases 3, 4, 5
+```
+
+**Why per-phase PR (atypical for plans, deliberate here):** most plans
+should be landing-mode-agnostic — the user picks `finish auto pr` for
+one PR or `<N> auto pr` for many. This canary prescribes sequential
+per-phase PRs because (a) each phase's test additions are small (~50-150
+lines) and independently reviewable; (b) a bug in one phase's
+reproducer doesn't block landing the others; (c) the per-phase PR
+exercises the hardened PR-mode pipeline 5× rather than 1×, providing
+incidental smoke-test value alongside the regression suite itself.
+
+After each phase's PR merges, the skill's `land-phase.sh` cleans up the
+worktree + local branch + remote branch. The next invocation creates a
+fresh worktree on a fresh branch (same name) from the updated `main`,
+which now includes the previous phase's changes.
 
 ## Progress Tracker
 
