@@ -227,8 +227,12 @@ script.
 
 - No `|| true` on fallible operations; explicit `if` for rc branching.
 - No `2>/dev/null` on operations whose success matters.
-- Capture test output with `> .test-results.txt 2>&1`; never pipe
-  through `tail`/`head`/`grep`.
+- Capture test output via the `TEST_OUT` idiom — route to
+  `/tmp/zskills-tests/$(basename "$(pwd)")/.test-results.txt` so the
+  capture file never shows up in `git status` (CLAUDE.md has the
+  canonical form). Inspectable-file capture is still the discipline;
+  only the location moved out of the working tree. Never pipe through
+  `tail`/`head`/`grep`.
 - No `git stash` in reproducer scripts (the hook would block it anyway).
 - Don't weaken tests to make them pass.
 - Real subprocess invocation — no `eval` shortcuts.
@@ -354,6 +358,22 @@ discrimination (0 / 2 / 128).
     (path must NOT exist). Invoke script. Assert rc=1, output contains
     `ERROR: git ls-remote for <branch> failed with exit 128 — origin unreachable, misconfigured, or auth failure`.
 
+- [ ] Append `section "land-phase.sh: /tmp test-output dir cleanup (1 case)"`:
+  - Rationale: commit `66d9138` (EPHEMERAL_TO_TMP Phase 3) extended
+    `land-phase.sh` to remove `/tmp/zskills-tests/<basename-of-worktree>/`
+    on successful landing (lines 80-88 of the script). Lock in this
+    behavior so a future edit can't silently regress it.
+  - Fixture: set up repo + worktree + `.landed` with `status: landed`
+    (same as the happy-path `ls-remote` fixture from Case A). Before
+    invoking, `mkdir -p /tmp/zskills-tests/$(basename "$WORKTREE")`
+    and `touch` a sentinel file inside it (e.g., `.canary-sentinel`).
+  - Invoke: `bash scripts/land-phase.sh <worktree>`.
+  - Assert: rc=0 AND `/tmp/zskills-tests/$(basename "$WORKTREE")` no
+    longer exists (directory and sentinel file both gone).
+  - Note: `tests/test-hooks.sh:946` already has a compound assertion
+    for this behavior; the canary adds a focused single-purpose test
+    at the layer-level gate where external users look first.
+
 ### Design & Constraints
 
 - Script signature: `bash scripts/land-phase.sh <worktree-path>` — ONE
@@ -374,7 +394,8 @@ discrimination (0 / 2 / 128).
 - [ ] Section "tracked ephemeral" passes 4 tests (one per filename) AND
       the array-drift guard passes.
 - [ ] Section "ls-remote" passes 3 tests (cases A, B, C).
-- [ ] Cumulative canary suite: 26 tests passing (18 + 8).
+- [ ] Section "/tmp test-output dir cleanup" passes 1 test.
+- [ ] Cumulative canary suite: 27 tests passing (18 + 9).
 - [ ] `bash tests/run-all.sh` exits 0.
 
 ### Dependencies
@@ -494,7 +515,7 @@ other six are FAILs (exit 1 when fired).
 - [ ] Invariant #6: 2 tests pass; two fixture files committed.
 - [ ] Invariant #7: 3 tests pass (no-divergence, fetch-fail,
       squash-merge-divergence), all asserting rc=0.
-- [ ] Cumulative canary suite: 39 tests passing (26 + 13).
+- [ ] Cumulative canary suite: 40 tests passing (27 + 13).
 - [ ] `bash tests/run-all.sh` exits 0.
 
 ### Dependencies
@@ -636,7 +657,7 @@ enforcement, and auto resolution including the current Sonnet fallback.
 - [ ] Auto success path: 2 tests pass.
 - [ ] Min_model not configured: 1 test passes.
 - [ ] Fixture files committed: `transcript-synthetic.jsonl`, `transcript-opus.jsonl`.
-- [ ] Cumulative canary suite: 51 tests passing (39 + 12).
+- [ ] Cumulative canary suite: 52 tests passing (40 + 12).
 
 ### Dependencies
 
@@ -718,8 +739,8 @@ must fail the canary.
 - [ ] Progress Tracker all 5 rows ✅ with SHAs.
 - [ ] `reports/plan-canary-failure-injection.md` exists.
 - [ ] Final `bash tests/test-canary-failures.sh` reports
-      `77 passed, 0 failed` (installed-copy present: 18+8+13+12+26) or
-      `67 passed, 0 failed` (installed-copy skipped: 18+8+13+12+16).
+      `78 passed, 0 failed` (installed-copy present: 18+9+13+12+26) or
+      `68 passed, 0 failed` (installed-copy skipped: 18+9+13+12+16).
 - [ ] `bash tests/run-all.sh` exits 0.
 
 ### Dependencies
