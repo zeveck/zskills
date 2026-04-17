@@ -138,6 +138,44 @@ expect_allow 'heredoc containing git stash -u' "$(printf 'cat <<EOF\ngit stash -
 # every invocation subshell-cd's into the fixture's primary repo first.
 SCRIPT="$REPO_ROOT/scripts/land-phase.sh"
 
+section "write-landed.sh: rc-checked atomic marker writes (3 cases)"
+# Locks in the rc-check behavior introduced with scripts/write-landed.sh.
+# The ad-hoc cat+mv pattern this helper replaces silently wrote empty/
+# partial markers on disk-full / read-only failures; the helper catches
+# those via `if ! cat ...` and `if ! mv ...` with loud stderr + rc=1.
+
+WRITE_LANDED="$REPO_ROOT/scripts/write-landed.sh"
+
+# Case 1: happy path — cat body into helper, .landed ends up with correct content.
+wl_primary=$(setup_fixture_repo)
+wl_worktree=$(mktemp -u)
+FIXTURE_DIRS+=("$wl_worktree")
+git -C "$wl_primary" worktree add -q "$wl_worktree" -b canary/wl-happy
+if printf 'status: landed\ndate: now\n' | bash "$WRITE_LANDED" "$wl_worktree" \
+   && [ -f "$wl_worktree/.landed" ] \
+   && grep -qxF 'status: landed' "$wl_worktree/.landed" \
+   && [ ! -f "$wl_worktree/.landed.tmp" ]; then
+  pass "write-landed.sh happy path: .landed written, .tmp cleaned"
+else
+  fail "write-landed.sh happy path — .landed content or .tmp-cleanup wrong"
+fi
+
+# Case 2: missing/bad worktree arg — exit 1 with specific error.
+wl_bad_out=$(printf 'status: landed\n' | bash "$WRITE_LANDED" 2>&1); wl_bad_rc=$?
+if [ "$wl_bad_rc" -eq 1 ] && [[ "$wl_bad_out" == *"requires a worktree-path arg"* ]]; then
+  pass "write-landed.sh missing arg: rc=1 with usage error"
+else
+  fail "write-landed.sh missing arg — rc=$wl_bad_rc; out: $wl_bad_out"
+fi
+
+# Case 3: worktree path doesn't exist — exit 1 with specific error.
+wl_nx_out=$(printf 'status: landed\n' | bash "$WRITE_LANDED" /tmp/write-landed-nx-$$-canary 2>&1); wl_nx_rc=$?
+if [ "$wl_nx_rc" -eq 1 ] && [[ "$wl_nx_out" == *"worktree path does not exist"* ]]; then
+  pass "write-landed.sh nonexistent path: rc=1 with path error"
+else
+  fail "write-landed.sh nonexistent path — rc=$wl_nx_rc; out: $wl_nx_out"
+fi
+
 section "land-phase.sh: dirty worktree refused (1 case)"
 dirty_primary=$(setup_fixture_repo)
 dirty_worktree=$(mktemp -u)
@@ -374,21 +412,22 @@ else
   fail "invariant #5 negative — rc=$i5b_rc (want 0); '#5' absent? out: $i5b_out"
 fi
 
-section "Invariant #6: in-progress sentinel in plan (2 cases)"
+section "Invariant #6: in-progress sentinel in plan (3 cases)"
 # Fixture files are committed to the repo (tests/fixtures/canary/). Pass
 # the path through --plan-file; invariant #6 reads only that file.
 i6_fire_plan="$REPO_ROOT/tests/fixtures/canary/plan-with-sentinel.md"
 i6_negative_plan="$REPO_ROOT/tests/fixtures/canary/plan-without-sentinel.md"
+i6_prose_plan="$REPO_ROOT/tests/fixtures/canary/plan-prose-sentinel.md"
 
-# Fire case: fixture contains the in-progress sentinel.
+# Fire case: fixture has 🟡 in a markdown table row.
 i6a_primary=$(setup_fixture_repo)
 expect_script_exit \
-  "invariant #6 fire: plan contains in-progress sentinel" \
+  "invariant #6 fire: plan has sentinel in a table row" \
   1 \
   "INVARIANT-FAIL (#6):" \
   bash -c "cd \"$i6a_primary\" && bash \"$INVARIANTS_SCRIPT\" --worktree \"\" --branch \"\" --landed-status \"\" --plan-slug \"\" --plan-file \"$i6_fire_plan\""
 
-# Negative case: fixture has no sentinel — must not fire #6.
+# Negative case A: clean plan (no sentinel anywhere) — must not fire #6.
 i6b_primary=$(setup_fixture_repo)
 i6b_out=$(cd "$i6b_primary" && bash "$INVARIANTS_SCRIPT" \
   --worktree "" --branch "" --landed-status "" --plan-slug "" \
@@ -397,6 +436,20 @@ if [ "$i6b_rc" -eq 0 ] && [[ "$i6b_out" != *"INVARIANT-FAIL (#6):"* ]]; then
   pass "invariant #6 negative: clean plan, no #6 failure"
 else
   fail "invariant #6 negative — rc=$i6b_rc (want 0); '#6' absent? out: $i6b_out"
+fi
+
+# Negative case B (regression guard for row-scoped grep): plan mentions
+# the sentinel in PROSE only — table rows are all ✅/⬚. Must NOT fire
+# #6. If invariant #6 ever regresses to whole-file grep, this test
+# fails loudly.
+i6c_primary=$(setup_fixture_repo)
+i6c_out=$(cd "$i6c_primary" && bash "$INVARIANTS_SCRIPT" \
+  --worktree "" --branch "" --landed-status "" --plan-slug "" \
+  --plan-file "$i6_prose_plan" 2>&1); i6c_rc=$?
+if [ "$i6c_rc" -eq 0 ] && [[ "$i6c_out" != *"INVARIANT-FAIL (#6):"* ]]; then
+  pass "invariant #6 prose-regression: sentinel in prose only, no #6 failure"
+else
+  fail "invariant #6 prose-regression — rc=$i6c_rc (want 0); '#6' absent? out: $i6c_out"
 fi
 
 section "Invariant #7: main divergence WARN (3 cases)"
