@@ -1,7 +1,7 @@
 ---
 title: Chunked Finish-Auto Cron Canary
 created: 2026-04-18
-status: active
+status: complete
 ---
 
 # Plan: Chunked Finish-Auto Cron Canary
@@ -59,9 +59,9 @@ end-to-end result for the post-fix regression baseline.
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 — Create phase-1.md | ⬚ | | |
-| 2 — Create phase-2.md | ⬚ | | |
-| 3 — Create phase-3.md | ⬚ | | |
+| 1 — Create phase-1.md | ✅ | `1a39978` | phase-1.md on branch; user-invoked initial turn |
+| 2 — Create phase-2.md | ✅ | `ddc1e29` | cron-fired (cron 9d6409e1, +5 spacing) — CLEAN FIRE |
+| 3 — Create phase-3.md | ✅ | `e6c5e24` | cron-fired (cron f1629378, +5 spacing) — CLEAN FIRE; also lands the plan |
 
 ## Phase 1 — Create docs/chunked-canary/phase-1.md
 
