@@ -66,12 +66,14 @@ Modify `skills/update-zskills/SKILL.md` (+ mirror to `.claude/skills/update-zski
 | `locked-main-pr` | `"pr"` | `true` | **enabled** |
 | `direct` | `"direct"` | `false` | disabled |
 
-**Invocation modes**:
+**Invocation modes** (bare keyword, matches existing `install` / `stop` / `next` / `status` / `--with-addons` arg style — no `preset=` prefix):
 
-- `/update-zskills preset=locked-main-pr` → use that preset, no prompt
-- `/update-zskills preset=cherry-pick` → explicit default, no prompt
+- `/update-zskills locked-main-pr` → apply that preset, no prompt
+- `/update-zskills cherry-pick` → explicit default, no prompt
+- `/update-zskills direct` → direct-landing preset, no prompt
 - `/update-zskills` **and no existing `.claude/zskills-config.json`** → **ask the user** (see prompt below); write config accordingly
-- `/update-zskills` **and existing config** → respect it, DON'T re-ask (idempotent re-install)
+- `/update-zskills` **and existing config, no preset arg** → respect it, DON'T re-ask (idempotent re-install; updates skills only)
+- `/update-zskills <preset>` **and existing config** → **apply the preset**. Overwrite ONLY the preset-owned config fields: `execution.landing`, `execution.main_protected`, and the `.claude/hooks/block-unsafe-generic.sh` push-block line. Preserve everything else (branch_prefix, test commands, CI settings, dev_server, UI patterns, timezone). Rationale: if the user explicitly passes a preset on an existing install, they want to change those fields — that's the point of the flag.
 
 **Greenfield prompt** (plain conversational text, no AskUserQuestion per CLAUDE.md):
 
