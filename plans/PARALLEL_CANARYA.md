@@ -1,7 +1,7 @@
 ---
 title: Parallel Pipeline Canary A
 created: 2026-04-18
-status: active
+status: complete
 ---
 
 # Plan: Parallel Pipeline Canary A
@@ -29,7 +29,7 @@ alone):
 
 | Phase | Status | Commit | Notes |
 |-------|--------|--------|-------|
-| 1 — Create canary-A.md | ⬚ | | |
+| 1 — Create canary-A.md | ✅ | `a889c7f` | file created, 364/364 tests pass |
 
 ## Phase 1 — Create docs/canary-parallel-A.md
 
