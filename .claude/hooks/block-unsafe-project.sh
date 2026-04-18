@@ -128,12 +128,15 @@ if [[ "$INPUT" =~ rm[[:space:]].*-[a-zA-Z]*r[a-zA-Z]*.*\.zskills/tracking ]]; th
 fi
 
 # Block agent execution of clear-tracking script (reading is OK).
-# Matches bash|sh only at a word boundary (start, whitespace, or command
-# separator), NOT as a filename suffix. So "git add foo.sh scripts/clear-tracking.sh"
-# no longer false-positives (the "sh" in "foo.sh" is preceded by "." which is
-# excluded from the boundary set).
-_CT_EXEC_CMD='(^|[[:space:]]|[;&|"])(bash|sh)[[:space:]][^;&|"]*clear-tracking'
-_CT_EXEC_DIR='(^|[[:space:]]|[;&|"])\./[^[:space:]"]*clear-tracking'
+# Matches bash|sh only at a command-verb boundary:
+#   - start of the JSON command field (`"command":"`)
+#   - command separator (`;`, `&`, `|`, `(`, backtick)
+#   - start of input
+# Bare whitespace is NOT a boundary (that's what caused echo-string false
+# positives: `echo "Run: bash scripts/clear-tracking.sh"` has a space before
+# `bash` but the `bash` there is data, not a command verb).
+_CT_EXEC_CMD='(^|[;&|(`]|"command":")[[:space:]]*(bash|sh)[[:space:]][^;&|"]*clear-tracking'
+_CT_EXEC_DIR='(^|[;&|(`]|"command":")[[:space:]]*\./[^[:space:]"]*clear-tracking'
 if [[ "$INPUT" =~ $_CT_EXEC_CMD ]] || [[ "$INPUT" =~ $_CT_EXEC_DIR ]]; then
   block_with_reason "BLOCKED: Only the user can run the clear-tracking script. Run: ! bash scripts/clear-tracking.sh"
 fi

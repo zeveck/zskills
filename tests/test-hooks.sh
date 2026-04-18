@@ -288,15 +288,21 @@ expect_project_allow "cat scripts/clear-tracking.sh"
 expect_project_allow "grep -n confirm scripts/clear-tracking.sh"
 
 # Regression: must NOT false-positive on commands that merely MENTION the path
-# without executing it. The old regex matched `[^a-zA-Z]sh[[:space:]]` which
-# caught `.sh ` anywhere; the fix requires bash|sh at a real word boundary.
+# without executing it. The fix requires bash|sh at a command-verb boundary
+# (start of JSON command field, or a command separator ;&|(`), NOT bare
+# whitespace. So file-suffix `.sh ` and mentions inside echo strings are OK.
 expect_project_allow "git add .claude/hooks/block-unsafe-project.sh scripts/clear-tracking.sh"
 expect_project_allow "diff old.sh scripts/clear-tracking.sh"
 expect_project_allow "ls -la foo.sh scripts/clear-tracking.sh"
-# Execution via pipe/separator is still blocked (word-boundary after them).
+# Echo-string false positive (session 2 of parallel-canary run hit this):
+# "bash" inside a quoted echo is data, not a verb.
+expect_project_allow "echo 'Run: bash scripts/clear-tracking.sh to reset markers'"
+expect_project_allow "printf 'hint: sh scripts/clear-tracking.sh for users\n'"
+# Execution via pipe/separator/subshell is still blocked.
 expect_project_deny "cat foo | bash scripts/clear-tracking.sh"
 expect_project_deny "true && bash scripts/clear-tracking.sh"
 expect_project_deny "cd /tmp ; bash scripts/clear-tracking.sh"
+expect_project_deny "echo \$(bash scripts/clear-tracking.sh)"
 
 teardown_project_test
 
