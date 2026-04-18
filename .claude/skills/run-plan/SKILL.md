@@ -2046,29 +2046,40 @@ CI_LOG="/tmp/ci-failure-${PR_NUMBER}.txt"
 # Timeout: 10 minutes. In cron mode, a hung --watch blocks the entire turn.
 # Exit code 124 from timeout means "timed out" -- treat as "checks still pending".
 timeout 600 gh pr checks "$PR_NUMBER" --watch 2>"$CI_LOG.stderr"
-CI_EXIT=$?
+WATCH_EXIT=$?
 
-if [ "$CI_EXIT" -eq 0 ]; then
-  echo "CI checks passed."
-  CI_STATUS="pass"
-elif [ "$CI_EXIT" -eq 124 ]; then
+# `gh pr checks --watch` exit code is UNRELIABLE across gh versions —
+# some (observed in the CI_FIX_CYCLE_CANARY run, 2026-04-18) return 0
+# even when a check concluded `fail`, making --watch useless as a
+# pass/fail signal. Only trust exit 124 from `timeout(1)` to mean
+# "still running, give up waiting." For every other outcome, re-check
+# explicitly with `gh pr checks $PR_NUMBER` (no --watch), which DOES
+# signal via exit code: 0=all pass, 1=any failure, 8=some still pending.
+if [ "$WATCH_EXIT" -eq 124 ]; then
   echo "CI checks timed out after 10 minutes. Treating as pending."
   CI_STATUS="pending"
   # Write .landed with pr-ready so the next cron turn re-checks.
   # Do NOT enter the fix cycle -- checks are still running, not failing.
 else
-  echo "CI checks failed (exit $CI_EXIT). Reading failure logs..."
-  CI_STATUS="fail"
-  FAILED_RUN_ID=$(gh run list --branch "$BRANCH_NAME" --status failure --limit 1 \
-    --json databaseId --jq '.[0].databaseId' 2>/dev/null)
-  if [ -n "$FAILED_RUN_ID" ]; then
-    gh run view "$FAILED_RUN_ID" --log-failed 2>&1 | head -500 > "$CI_LOG"
+  if gh pr checks "$PR_NUMBER" >/dev/null 2>&1; then
+    echo "CI checks passed."
+    CI_STATUS="pass"
+  else
+    CHECK_RC=$?
+    echo "CI checks did not pass (gh pr checks rc=$CHECK_RC). Reading failure logs..."
+    CI_STATUS="fail"
+    FAILED_RUN_ID=$(gh run list --branch "$BRANCH_NAME" --status failure --limit 1 \
+      --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+    if [ -n "$FAILED_RUN_ID" ]; then
+      gh run view "$FAILED_RUN_ID" --log-failed 2>&1 | head -500 > "$CI_LOG"
+    fi
   fi
 fi
 ```
 
-Note: `gh pr checks --watch` is used WITHOUT `--fail-fast` (that flag may not
-exist in all gh versions).
+Note: `gh pr checks --watch` is used WITHOUT `--fail-fast` (that flag may
+not exist in all gh versions). The re-check AFTER the watch is what
+actually determines pass/fail — do not rely on the watch's exit code alone.
 
 **Timeout handling:** If `CI_STATUS` is `"pending"` (timeout exit 124), skip the
 fix cycle entirely and write `.landed` with `status: pr-ready`. The next cron
@@ -2173,14 +2184,17 @@ Attempting fix..."
 
     echo "Waiting for CI re-check..."
     timeout 600 gh pr checks "$PR_NUMBER" --watch 2>"$CI_LOG.stderr"
-    CI_EXIT=$?
-    if [ "$CI_EXIT" -eq 0 ]; then
-      echo "CI checks passed after fix attempt $ATTEMPT."
-      CI_STATUS="pass"
-      break
-    elif [ "$CI_EXIT" -eq 124 ]; then
+    WATCH_EXIT=$?
+    # See the pass/fail-determination block above: `--watch`'s exit
+    # code is unreliable; re-check explicitly with `gh pr checks`.
+    if [ "$WATCH_EXIT" -eq 124 ]; then
       echo "CI checks timed out after fix attempt $ATTEMPT. Treating as pending."
       CI_STATUS="pending"
+      break
+    fi
+    if gh pr checks "$PR_NUMBER" >/dev/null 2>&1; then
+      echo "CI checks passed after fix attempt $ATTEMPT."
+      CI_STATUS="pass"
       break
     fi
     # Re-read failure logs for next attempt
