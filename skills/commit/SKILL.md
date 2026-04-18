@@ -301,7 +301,12 @@ if [ -n "$PR_URL" ]; then
     sleep 10
   done
   if [ "$CHECK_COUNT" != "0" ]; then
-    if timeout 600 gh pr checks "$PR_NUMBER" --watch 2>/dev/null; then
+    # `gh pr checks --watch` exit code is unreliable across gh versions
+    # (can return 0 even when a check failed). Use --watch only to block
+    # until completion; then re-check with `gh pr checks` (no --watch),
+    # which DOES signal via exit code reliably.
+    timeout 600 gh pr checks "$PR_NUMBER" --watch 2>/dev/null
+    if gh pr checks "$PR_NUMBER" >/dev/null 2>&1; then
       echo "CI checks passed."
     else
       echo "CI checks failed. Run /verify-changes to diagnose."
