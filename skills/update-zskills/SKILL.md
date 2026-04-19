@@ -219,45 +219,15 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
 4. Copy `config/zskills-config.schema.json` from `$PORTABLE` to
    `.claude/zskills-config.schema.json` in the target project (so the
    `$schema` reference in the config resolves correctly).
-5. **If `$PRESET_ARG` was set** (user passed a preset keyword with an
-   existing config): rewrite ONLY the three preset-owned fields —
-   `execution.landing`, `execution.main_protected`, and
-   `BLOCK_MAIN_PUSH` in `.claude/hooks/block-unsafe-generic.sh` — using
-   the mapping table from Step 0.25. Preserve every other field in the
-   config verbatim. Prefer targeted `Edit` calls over a full Write so
-   the surrounding JSON (including `$schema`, comments, formatting,
-   and any fields the schema hasn't seen yet) stays intact. Then tell
-   the user which fields changed:
-   > Applied preset `<name>`: landing=<value>, main_protected=<value>,
-   > BLOCK_MAIN_PUSH=<value>. Other fields preserved.
-
-   **Idempotency:** if all three values already match the preset,
-   report "Preset `<name>` already applied — no changes needed" and
-   skip the writes. Don't print "Applied" when nothing changed.
-
-   **Edit fallbacks** — the targeted `Edit` can fail for two reasons.
-   Handle each explicitly:
-   - **Config JSON formatting variance** (e.g., compact form, tabs,
-     `main_protected:false` without the space): if `Edit` fails to
-     match, fall back to a full `Write` of the merged config. Read the
-     existing file, parse all known fields with the Step 0.5
-     bash-regex block, overlay the three preset-owned fields, re-emit
-     in the canonical style shown below in "If it does not exist"
-     item 3.
-   - **`execution` key missing entirely** (old pre-preset config): if
-     the regex probes for `landing` and `main_protected` both miss,
-     the config predates the preset UX. Insert a fresh `execution`
-     block at the top level of the config with all three fields set
-     from the preset.
-   - **Hook missing `BLOCK_MAIN_PUSH=` line** (old pre-toggle hook):
-     if the targeted `Edit` against `BLOCK_MAIN_PUSH=<N>` finds no
-     match, the hook predates this feature. Don't attempt a splice.
-     Set a flag `PRESET_HOOK_PENDING=1` and skip the hook edit for
-     now; the config edits above still apply. Step 3.5 in "Pull
-     Latest and Update" detects `PRESET_HOOK_PENDING=1`, upgrades
-     the legacy hook, AND applies the preset `BLOCK_MAIN_PUSH` value
-     before returning — so the hook edit happens atomically with the
-     re-copy, not as a separate pass.
+5. **If `$PRESET_ARG` was set**, defer preset application to
+   **Step F — Apply Preset** (invoked at the end of both install and
+   update paths). Step F runs `scripts/apply-preset.sh` which handles
+   all three preset-owned fields (`execution.landing`,
+   `execution.main_protected`, `BLOCK_MAIN_PUSH`) atomically,
+   including idempotency, JSON formatting variance, missing
+   `execution` key, and legacy hooks without the `BLOCK_MAIN_PUSH=`
+   line. Don't attempt a manual `Edit` here — the script is the
+   single source of truth.
 
 **If it does not exist:**
 1. **If `$PRESET_ARG` is empty**, run the greenfield prompt (Step 0.6)
@@ -305,22 +275,13 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
    left empty by auto-detection stay as empty strings — the install
    summary's test-setup blurb tells the user what to fill in later.
 
-4. **Set the hook toggle — deferred on greenfield.** On a true
-   greenfield install, `.claude/hooks/block-unsafe-generic.sh` does
-   not exist yet; it is copied by Step C below. Defer the hook flip
-   to the end of Step C when the hook is in place.
-
-   Once the hook exists (after Step C, or if it already existed from
-   a prior partial install), change the line `BLOCK_MAIN_PUSH=<N>` to
-   match `<preset.BLOCK_MAIN_PUSH>` from Step 0.25's table using a
-   targeted `Edit` (old: `BLOCK_MAIN_PUSH=1` or `BLOCK_MAIN_PUSH=0`,
-   new: the preset value). The hook ships with `BLOCK_MAIN_PUSH=1`,
-   so the flip is only required when the preset value is `0`. This
-   is the only line the preset controls in the hook.
-
-   If the hook exists but lacks the `BLOCK_MAIN_PUSH=` line, see the
-   Edit-fallback note in "If it exists" item 5 above — run the
-   legacy-hook upgrade flow first, then retry.
+4. **Hook toggle handled by Step F.** The config's `execution.landing`
+   and `execution.main_protected` placeholders above are substituted
+   in at write time. The `BLOCK_MAIN_PUSH` line in the hook is set by
+   **Step F — Apply Preset** at the end of the install path, after
+   Step C has copied the hook. Step F idempotently flips the value
+   (or splices the line, on a legacy hook without it) to match the
+   preset target. Nothing to do here.
 
 **Merge algorithm pseudocode:**
 ```
@@ -490,6 +451,7 @@ Look in `scripts/` for these files (all required by installed skills):
 - `worktree-add-safe.sh` — referenced by `/run-plan`, `/fix-issues`, `/do` for safe worktree creation (discriminates fresh vs poisoned stale branches)
 - `sanitize-pipeline-id.sh` — shared PIPELINE_ID sanitizer (used by writers before persisting ID)
 - `migrate-tracking.sh` — one-shot migration from flat to per-pipeline subdir layout
+- `apply-preset.sh` — required by the preset UX (Step F); splices/flips the `BLOCK_MAIN_PUSH` line in `block-unsafe-generic.sh` and updates `execution.landing`/`execution.main_protected` in config
 - `statusline.sh` — session statusline helper (optional but should be installed if the user has it)
 
 ### Step 5 — Check skills with additional requirements
@@ -651,29 +613,12 @@ Copy missing hooks from `$PORTABLE/hooks/` to `.claude/hooks/`.
 >   test output (must capture to file), verifies tests ran before commit,
 >   and optionally checks for UI verification before committing UI changes
 
-**Main-push block (preset-controlled):**
-
-`block-unsafe-generic.sh` always blocks `git push` to feature branches
-named `main` or `master` when `BLOCK_MAIN_PUSH=1` (the top-of-file
-variable). The preset you selected determines this value:
-
-- `cherry-pick` → `BLOCK_MAIN_PUSH=0` (agent can push main; user usually
-  pushes via `! git push` anyway, and CLAUDE.md rules still forbid
-  unprompted pushes)
-- `locked-main-pr` → `BLOCK_MAIN_PUSH=1` (hook blocks any agent attempt
-  to push to main; feature-branch pushes are still allowed)
-- `direct` → `BLOCK_MAIN_PUSH=0`
-
-The preset mapping is final — there is no user follow-up that overrides
-it. Flip the line with a targeted `Edit`:
-```
-old: BLOCK_MAIN_PUSH=1
-new: BLOCK_MAIN_PUSH=0   # (or vice versa)
-```
-This is the only preset-controlled line in the hook. Never regex-rewrite
-deeper into the hook file. If the line is absent (old pre-toggle hook),
-run the legacy-hook upgrade flow in "Pull Latest and Update" Step 3.5
-first, then retry the `Edit`.
+**Main-push block (preset-controlled):** `block-unsafe-generic.sh`
+blocks `git push` to `main`/`master` when `BLOCK_MAIN_PUSH=1`, the
+top-of-file variable. The preset controls this value via
+**Step F — Apply Preset** at the end of the install/update path; no
+action here in Step C. Preset mapping: `cherry-pick` → `0`,
+`locked-main-pr` → `1`, `direct` → `0`.
 
 **Note on tracking enforcement:** The tracking enforcement section in
 `block-unsafe-project.sh` (protecting `.zskills/tracking/`, blocking
@@ -740,12 +685,15 @@ to `.claude/settings.json`. Users can customize further with `/statusline`.
 
 #### Step D — Fill script gaps
 
-Copy missing scripts from `$PORTABLE/scripts/` to `scripts/`.
+Copy missing scripts from `$PORTABLE/scripts/` to `scripts/` (verify
+executable bit is preserved).
 
 - For scripts with placeholders: prompt user for values and replace.
-- Copy `clear-tracking.sh` from `$PORTABLE/scripts/` to `scripts/` if missing.
-  This script lets the user manually clear stale tracking state. Agents are
-  blocked from running it by the project hook.
+- Copy `clear-tracking.sh` if missing — lets the user manually clear
+  stale tracking state. Agents are blocked from running it by the
+  project hook.
+- Copy `apply-preset.sh` if missing — required by Step F (preset UX).
+  Without it, `/update-zskills <preset>` will fail.
 
 Report: "Installed N scripts: [list]"
 
@@ -765,7 +713,37 @@ Skip this step if no add-on flag was provided.
 3. **Report:** "Installed N add-on skills: [list]" or "Add-on skills already
    installed — skipped."
 
-#### Step F — Final report
+#### Step F — Apply Preset (if `$PRESET_ARG` is non-empty)
+
+This is the **single place** where preset values land into config and
+hook. Called from both "Fill All Gaps" (install path) and "Pull Latest
+and Update" (update path) before their final report.
+
+If `$PRESET_ARG` is empty, skip this step entirely — nothing to do.
+
+Otherwise:
+
+```bash
+bash scripts/apply-preset.sh "$PRESET_ARG"
+```
+
+Capture stdout and the exit code. Report to the user verbatim:
+- Exit 0: "Applied preset '<name>':" followed by the list of changes
+  the script reported.
+- Exit 1: "Preset '<name>' already applied — no changes needed."
+- Exit 2/3/4: print the script's error message and halt; these only
+  fire when the config file is missing, the hook file is missing, the
+  config JSON is malformed, or an unknown preset was somehow passed.
+  In that case, advise the user and do not continue.
+
+**Why a script and not a series of `Edit` calls in the SKILL.md?**
+The script is deterministic, idempotent, and unit-tested
+(`tests/test-apply-preset.sh`, 16 cases covering legacy hooks,
+missing `execution` keys, compact JSON, idempotency, error paths).
+A prompt-side sequence of `Edit` calls is fragile against JSON
+formatting variance and legacy hook versions. Delegate to the script.
+
+#### Step G — Final report
 
 ```
 Installation complete.
@@ -800,66 +778,27 @@ Run /update-zskills to check for updates later.
    the new version to `.claude/skills/`. Show the user what changed (file
    names and a brief diff summary) before overwriting.
 
-3.5. **Legacy hook upgrade — detect and offer re-copy.** Key Rule #2
-   normally forbids overwriting existing hooks, but there are "known
-   version markers" that signal the installed hook is from an older
-   zskills version and must be upgraded for a current feature to work.
-   Run this check:
-
-   ```bash
-   HOOK="$PROJECT_ROOT/.claude/hooks/block-unsafe-generic.sh"
-   if [ -f "$HOOK" ] && ! grep -q '^BLOCK_MAIN_PUSH=' "$HOOK"; then
-     LEGACY_HOOK=1
-   fi
-   ```
-
-   The `BLOCK_MAIN_PUSH=` line was added in the preset-UX release. Its
-   absence means the installed hook predates preset flipping and
-   `/update-zskills <preset>` cannot toggle it.
-
-   When `LEGACY_HOOK=1`, tell the user exactly this:
-
-   > Your `.claude/hooks/block-unsafe-generic.sh` is from a pre-preset
-   > version of zskills and lacks the `BLOCK_MAIN_PUSH` toggle line.
-   > To use the new preset UX I need to re-copy the hook from
-   > `$ZSKILLS_PATH/hooks/block-unsafe-generic.sh`. Here is the diff
-   > of what changes:
-   >
-   > ```diff
-   > <output of: diff -u .claude/hooks/block-unsafe-generic.sh \
-   >                     $ZSKILLS_PATH/hooks/block-unsafe-generic.sh>
-   > ```
-   >
-   > Re-copy and overwrite? [Y/n]
-
-   - On `y`/`Y`/empty: `cp "$ZSKILLS_PATH/hooks/block-unsafe-generic.sh"
-     "$HOOK"`. Then, **if `PRESET_HOOK_PENDING=1`** (set by Step 0.5
-     item 5 when the user passed a preset arg on a legacy install),
-     immediately run the targeted `Edit` on the freshly-copied hook
-     to set `BLOCK_MAIN_PUSH` to `<preset.BLOCK_MAIN_PUSH>`. Clear
-     the flag. Confirm: "Hook upgraded and preset `<name>` applied."
-     If the flag was not set, just confirm: "Hook upgraded. You can
-     now run `/update-zskills <preset>`."
-   - On `n`: leave the hook alone. Warn: "Preset flipping
-     (`/update-zskills cherry-pick` etc.) will not work until the hook
-     is upgraded. Re-run `/update-zskills` to retry, or copy
-     `$ZSKILLS_PATH/hooks/block-unsafe-generic.sh` manually." If
-     `PRESET_HOOK_PENDING=1`, also tell the user: "The config-side
-     preset fields were updated, but the hook toggle was NOT — the
-     `BLOCK_MAIN_PUSH` line in your existing hook still controls
-     behavior."
-
-   This is the **only** exception to Key Rule #2 — re-copy happens
-   solely when a required version marker is missing AND the user
-   confirms. Do not chain other hook updates onto this flow.
-
 4. **Update installed add-ons.** Check if any block-diagram add-on skills
    are installed (e.g., `.claude/skills/add-block/SKILL.md` exists). If so,
    diff against `$ZSKILLS_PATH/block-diagram/` and update the same way.
 
 5. **Fill new gaps.** For any NEW items (skills, hooks, scripts, CLAUDE.md
    rules) that don't exist yet, install them using the same steps as the
-   install path above (Steps B-E).
+   install path above (Steps B-E). In particular, if
+   `scripts/apply-preset.sh` is missing from the target, copy it — Step F
+   relies on it.
+
+5.5. **Apply Preset** (if `$PRESET_ARG` is non-empty). Run the same
+   procedure as **Step F** in the install path (defined above, under
+   "Fill All Gaps"):
+
+   ```bash
+   bash scripts/apply-preset.sh "$PRESET_ARG"
+   ```
+
+   Capture stdout and exit code; report verbatim to the user. This is
+   the single place where preset values land into config and hook —
+   regardless of install/update path.
 
 6. **Report:**
    ```
@@ -881,12 +820,13 @@ These rules are inviolable. They apply to all modes:
 1. **NEVER overwrite existing CLAUDE.md content** — append only. New rules
    go into `## Agent Rules` at the end. Never modify or delete existing
    sections.
-2. **NEVER silently overwrite existing hooks or scripts** — if a file
-   already exists, skip it by default. The user may have customized it.
-   **One documented exception:** in the "Pull Latest and Update" path,
-   Step 3.5 ("Legacy hook upgrade") may re-copy a hook when a required
-   version marker is absent, AND only after showing the user the diff
-   and getting confirmation.
+2. **NEVER overwrite existing hooks or scripts** — if a file already
+   exists, skip it. The user may have customized it.
+   (Exception: `scripts/apply-preset.sh` performs targeted in-place
+   edits to `block-unsafe-generic.sh` — splicing a missing
+   `BLOCK_MAIN_PUSH=` line or flipping its value. This is a
+   deterministic, non-destructive operation limited to that one line;
+   the rest of the hook is preserved byte-for-byte.)
 3. **Explain what hooks do when installing them** — don't just list
    filenames. The user needs to understand what each hook does.
 4. **Show the user what will be installed BEFORE doing it** — no silent
