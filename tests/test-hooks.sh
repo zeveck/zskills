@@ -197,14 +197,14 @@ echo "=== Push: BLOCK_MAIN_PUSH preset toggle ==="
 # presets. Simulate by sed-editing a tempo copy of the hook and confirm
 # main pushes are now allowed (the only branch that depends on the toggle).
 toggle_test() {
-  local label="$1" toggle_value="$2" branch="$3" expected="$4"
+  local label="$1" toggle_value="$2" branch="$3" expected="$4" cmd="${5:-git push}"
   local tmp_hook tmp_repo result
   tmp_hook=$(mktemp)
   sed -E "s/^BLOCK_MAIN_PUSH=[01]/BLOCK_MAIN_PUSH=$toggle_value/" "$HOOK" > "$tmp_hook"
   tmp_repo=$(mktemp -d)
   (cd "$tmp_repo" && git init -q -b "$branch" 2>/dev/null \
     || (cd "$tmp_repo" && git init -q && git checkout -b "$branch" 2>/dev/null))
-  result=$(cd "$tmp_repo" && echo '{"tool_name":"Bash","tool_input":{"command":"git push"}}' | bash "$tmp_hook" 2>/dev/null)
+  result=$(cd "$tmp_repo" && echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$tmp_hook" 2>/dev/null)
   rm -rf "$tmp_repo" "$tmp_hook"
   if [ "$expected" = "deny" ]; then
     if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
@@ -224,6 +224,10 @@ toggle_test() {
 toggle_test "BLOCK_MAIN_PUSH=1 still denies git push on main" 1 "main" "deny"
 toggle_test "BLOCK_MAIN_PUSH=0 allows git push on main" 0 "main" "allow"
 toggle_test "BLOCK_MAIN_PUSH=0 allows git push on master" 0 "master" "allow"
+# Explicit refspec under =0 — hook parses PUSH_TARGET from args, not from
+# current branch. Branch here is a feature branch to isolate refspec parsing.
+toggle_test "BLOCK_MAIN_PUSH=0 allows 'git push origin main' (explicit refspec)" 0 "feat/test" "allow" "git push origin main"
+toggle_test "BLOCK_MAIN_PUSH=0 allows 'git push -u origin main' (upstream + refspec)" 0 "feat/test" "allow" "git push -u origin main"
 
 echo ""
 echo "=== Non-Bash tool_name ==="
