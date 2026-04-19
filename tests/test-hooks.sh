@@ -24,7 +24,7 @@ expect_deny() {
   local label="$1"
   local cmd="$2"
   local result
-  result=$(echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$HOOK" 2>/dev/null)
+  result=$(echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$HOOK")
   if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
     pass "deny: $label"
   else
@@ -37,7 +37,7 @@ expect_allow() {
   local label="$1"
   local cmd="$2"
   local result
-  result=$(echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$HOOK" 2>/dev/null)
+  result=$(echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$HOOK")
   if [[ -z "$result" ]]; then
     pass "allow: $label"
   else
@@ -165,7 +165,7 @@ bare_push_test() {
   (cd "$tmp" && git init -q -b "$branch" 2>/dev/null \
     || (cd "$tmp" && git init -q && git checkout -b "$branch" 2>/dev/null))
   local result
-  result=$(cd "$tmp" && echo '{"tool_name":"Bash","tool_input":{"command":"git push"}}' | bash "$HOOK" 2>/dev/null)
+  result=$(cd "$tmp" && echo '{"tool_name":"Bash","tool_input":{"command":"git push"}}' | bash "$HOOK")
   rm -rf "$tmp"
   if [ "$expected" = "deny" ]; then
     if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
@@ -204,7 +204,7 @@ toggle_test() {
   tmp_repo=$(mktemp -d)
   (cd "$tmp_repo" && git init -q -b "$branch" 2>/dev/null \
     || (cd "$tmp_repo" && git init -q && git checkout -b "$branch" 2>/dev/null))
-  result=$(cd "$tmp_repo" && echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$tmp_hook" 2>/dev/null)
+  result=$(cd "$tmp_repo" && echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}" | bash "$tmp_hook")
   rm -rf "$tmp_repo" "$tmp_hook"
   if [ "$expected" = "deny" ]; then
     if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
@@ -232,7 +232,7 @@ toggle_test "BLOCK_MAIN_PUSH=0 allows 'git push -u origin main' (upstream + refs
 echo ""
 echo "=== Non-Bash tool_name ==="
 
-result=$(echo '{"tool_name":"Read","tool_input":{"file_path":"/tmp/foo"}}' | bash "$HOOK" 2>/dev/null)
+result=$(echo '{"tool_name":"Read","tool_input":{"file_path":"/tmp/foo"}}' | bash "$HOOK")
 if [[ -z "$result" ]]; then
   pass "non-Bash tool_name exits silently"
 else
@@ -243,7 +243,7 @@ echo ""
 echo "=== Edge cases ==="
 
 # Empty command field
-result=$(echo '{"tool_name":"Bash","tool_input":{"command":""}}' | bash "$HOOK" 2>/dev/null)
+result=$(echo '{"tool_name":"Bash","tool_input":{"command":""}}' | bash "$HOOK")
 if [[ -z "$result" ]]; then
   pass "empty command exits silently"
 else
@@ -251,7 +251,7 @@ else
 fi
 
 # tool_name with extra whitespace in JSON
-result=$(echo '{"tool_name": "Bash","tool_input":{"command":"git reset --hard"}}' | bash "$HOOK" 2>/dev/null)
+result=$(echo '{"tool_name": "Bash","tool_input":{"command":"git reset --hard"}}' | bash "$HOOK")
 if [[ "$result" == *"permissionDecision"*"deny"* ]]; then
   pass "tool_name with space after colon still detected"
 else
