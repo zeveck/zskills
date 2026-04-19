@@ -173,9 +173,20 @@ else
   TEST_PIPE_PATTERN="(${ESCAPED_UNIT}|${ESCAPED_FULL})"
 fi
 
-if [[ "$INPUT" =~ $TEST_PIPE_PATTERN ]] && [[ "$INPUT" == *'|'* ]]; then
-  block_with_reason "Don't pipe test output -- it loses failure details. Instead: TEST_OUT=\"/tmp/zskills-tests/\$(basename \"\$(pwd)\")\"; mkdir -p \"\$TEST_OUT\"; ${FULL_TEST_CMD:-npm run test:all} > \"\$TEST_OUT/.test-results.txt\" 2>&1 then read \"\$TEST_OUT/.test-results.txt\" to inspect failures."
-fi
+# Split on &&, ||, ; so the pipe check only fires when the pipe is in
+# the SAME segment as the test command (otherwise an unrelated `ls | head`
+# earlier in the command falsely trips the block).
+_TEST_SEP=$'\x01'
+_TEST_NORM="${INPUT//&&/$_TEST_SEP}"
+_TEST_NORM="${_TEST_NORM//||/$_TEST_SEP}"
+_TEST_NORM="${_TEST_NORM//;/$_TEST_SEP}"
+IFS=$'\x01' read -ra _TEST_SEGMENTS <<< "$_TEST_NORM"
+for _seg in "${_TEST_SEGMENTS[@]}"; do
+  if [[ "$_seg" =~ $TEST_PIPE_PATTERN ]] && [[ "$_seg" == *'|'* ]]; then
+    block_with_reason "Don't pipe test output -- it loses failure details. Instead: TEST_OUT=\"/tmp/zskills-tests/\$(basename \"\$(pwd)\")\"; mkdir -p \"\$TEST_OUT\"; ${FULL_TEST_CMD:-npm run test:all} > \"\$TEST_OUT/.test-results.txt\" 2>&1 then read \"\$TEST_OUT/.test-results.txt\" to inspect failures."
+  fi
+done
+unset _TEST_SEP _TEST_NORM _TEST_SEGMENTS _seg
 
 # --- main_protected: block git commit on main ---
 if [[ "$INPUT" =~ git[[:space:]]+commit ]] && is_main_protected && is_on_main; then

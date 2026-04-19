@@ -333,6 +333,29 @@ expect_project_deny "echo \$(bash scripts/clear-tracking.sh)"
 
 teardown_project_test
 
+echo ""
+echo "=== Project hook: test output piping ==="
+
+setup_project_test
+
+# Block: test command actually piped (the behavior we want to catch)
+expect_project_deny "npm test | tee out.txt"
+expect_project_deny "npm test | grep fail"
+expect_project_deny "npm test 2>&1 | head -20"
+expect_project_deny "npm run test:all | cat"
+
+# Allow: redirect-to-file is the correct pattern
+expect_project_allow "npm test > .test-results.txt 2>&1"
+expect_project_allow "npm run test:all > /tmp/out.txt 2>&1"
+
+# Regression: pipe on a DIFFERENT segment must not trip the test-pipe block.
+# The original bug: pipe check looked at the whole command, not per-segment.
+expect_project_allow "ls shared/dist/ | head -5 && npm test > .test-results.txt 2>&1"
+expect_project_allow "cat pkg.json | jq . ; npm test > out.txt 2>&1"
+expect_project_allow "echo start && grep foo src/ | wc -l || npm test > out.txt 2>&1"
+
+teardown_project_test
+
 # Default transcript written by setup_project_test declares
 # ZSKILLS_PIPELINE_ID=run-plan.test-plan so the hook reads under
 # .zskills/tracking/run-plan.test-plan/ per the Option B layout.
