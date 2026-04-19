@@ -19,7 +19,7 @@
 #   locked-main-pr         -> BLOCK_MAIN_PUSH=1
 #   direct                 -> BLOCK_MAIN_PUSH=0
 # Default here is 1 so zskills-shipped configs fail closed (safer).
-# Installer sed's this single line; do not inline-expand further below.
+# Installer flips this single line via Edit; do not inline-expand further below.
 BLOCK_MAIN_PUSH=1
 
 INPUT=$(cat)

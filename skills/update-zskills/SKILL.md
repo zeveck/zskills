@@ -115,6 +115,30 @@ Record the match as `$PRESET_ARG`. If none is present, `$PRESET_ARG` is
 empty. If more than one is present, stop with an error: "Specify exactly
 one preset: cherry-pick, locked-main-pr, or direct."
 
+Parser pseudocode (classify each token; presets, mode, and add-on flags
+are orthogonal and can coexist):
+
+```
+PRESET_ARG=""
+MODE=""          # "install" or "" (default = smart detection)
+ADDON_FLAG=""    # --with-addons | --with-block-diagram-addons | ""
+for tok in $ARGUMENTS; do
+  case "$tok" in
+    cherry-pick|locked-main-pr|direct)
+      [ -n "$PRESET_ARG" ] && fail "multiple presets"
+      PRESET_ARG="$tok" ;;
+    install) MODE="install" ;;
+    --with-addons|--with-block-diagram-addons) ADDON_FLAG="$tok" ;;
+    *) ;;  # unknown token — ignore, don't error
+  esac
+done
+```
+
+`install` + a preset keyword are compatible and combine (force-install
+with the chosen preset). `--with-addons` / `--with-block-diagram-addons`
+are independent of the preset — they control only which skills get
+installed, not landing behavior.
+
 Preset → field mapping (used wherever a preset is applied in later
 steps):
 
@@ -207,6 +231,31 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
    > Applied preset `<name>`: landing=<value>, main_protected=<value>,
    > BLOCK_MAIN_PUSH=<value>. Other fields preserved.
 
+   **Idempotency:** if all three values already match the preset,
+   report "Preset `<name>` already applied — no changes needed" and
+   skip the writes. Don't print "Applied" when nothing changed.
+
+   **Edit fallbacks** — the targeted `Edit` can fail for two reasons.
+   Handle each explicitly:
+   - **Config JSON formatting variance** (e.g., compact form, tabs,
+     `main_protected:false` without the space): if `Edit` fails to
+     match, fall back to a full `Write` of the merged config. Read the
+     existing file, parse all known fields with the Step 0.5
+     bash-regex block, overlay the three preset-owned fields, re-emit
+     in the canonical style shown below in "If it does not exist"
+     item 3.
+   - **`execution` key missing entirely** (old pre-preset config): if
+     the regex probes for `landing` and `main_protected` both miss,
+     the config predates the preset UX. Insert a fresh `execution`
+     block at the top level of the config with all three fields set
+     from the preset.
+   - **Hook missing `BLOCK_MAIN_PUSH=` line** (old pre-toggle hook):
+     if the targeted `Edit` against `BLOCK_MAIN_PUSH=<N>` finds no
+     match, the hook predates this feature. Don't attempt a splice —
+     redirect the user to the legacy-hook upgrade flow (see
+     "Pull Latest and Update" > "Step 3.5 — Legacy hook upgrade").
+     Run that step, then retry the `Edit`.
+
 **If it does not exist:**
 1. **If `$PRESET_ARG` is empty**, run the greenfield prompt (Step 0.6)
    to pick a preset. Otherwise skip the prompt and use `$PRESET_ARG`.
@@ -253,11 +302,22 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
    left empty by auto-detection stay as empty strings — the install
    summary's test-setup blurb tells the user what to fill in later.
 
-4. **Set the hook toggle.** In `.claude/hooks/block-unsafe-generic.sh`,
-   change the line `BLOCK_MAIN_PUSH=<N>` to match `<preset.BLOCK_MAIN_PUSH>`
-   from Step 0.25's table. Use a targeted `Edit` (old: `BLOCK_MAIN_PUSH=1`
-   or `BLOCK_MAIN_PUSH=0`, new: the preset value). This is the only line
-   the preset controls in the hook.
+4. **Set the hook toggle — deferred on greenfield.** On a true
+   greenfield install, `.claude/hooks/block-unsafe-generic.sh` does
+   not exist yet; it is copied by Step C below. Defer the hook flip
+   to the end of Step C when the hook is in place.
+
+   Once the hook exists (after Step C, or if it already existed from
+   a prior partial install), change the line `BLOCK_MAIN_PUSH=<N>` to
+   match `<preset.BLOCK_MAIN_PUSH>` from Step 0.25's table using a
+   targeted `Edit` (old: `BLOCK_MAIN_PUSH=1` or `BLOCK_MAIN_PUSH=0`,
+   new: the preset value). The hook ships with `BLOCK_MAIN_PUSH=1`,
+   so the flip is only required when the preset value is `0`. This
+   is the only line the preset controls in the hook.
+
+   If the hook exists but lacks the `BLOCK_MAIN_PUSH=` line, see the
+   Edit-fallback note in "If it exists" item 5 above — run the
+   legacy-hook upgrade flow first, then retry.
 
 **Merge algorithm pseudocode:**
 ```
@@ -323,23 +383,18 @@ Map the reply:
 - `1`, `cherry-pick`, or an empty/default-accepting reply → `cherry-pick`
 - `2`, `locked-main-pr`, or `pr` → `locked-main-pr`
 - `3`, `direct` → `direct`
+- **Anything else** (e.g. "idk", "whatever", "the usual") → treat as
+  default. Confirm once in plain text: "Going with cherry-pick (the
+  default). Run `/update-zskills locked-main-pr` later to switch." —
+  then proceed. Never re-ask the prompt; never invent a 4th option.
 
-Set `$PRESET_ARG` to the chosen preset and proceed.
-
-**Follow-up for option (2):** If the user picked `locked-main-pr`, ask:
-
-```
-Enable git-push block on main? (recommended for shared repos) [Y/n]
-```
-
-- Empty or anything starting with `y`/`Y` → `BLOCK_MAIN_PUSH=1` (default)
-- `n`/`N` → override `BLOCK_MAIN_PUSH=0` for this install; the rest of
-  the preset mapping still applies (landing=`pr`, main_protected=`true`).
-  Tell the user: "Main push block disabled — `main_protected=true` in
-  the config still blocks agent commits on main, but the hook will not
-  block `git push` to main."
-
-No follow-up for options (1) or (3) — the preset mapping is final.
+Set `$PRESET_ARG` to the chosen preset and proceed. No follow-up
+questions — the three-field mapping (landing + main_protected +
+BLOCK_MAIN_PUSH) in Step 0.25 is final. In particular, we do **not**
+ask "do you want the main-push block on?" for `locked-main-pr`:
+`main_protected=true` already makes `block-unsafe-project.sh` block
+agent commits, cherry-picks, and pushes on main, so the generic hook's
+`BLOCK_MAIN_PUSH=1` is belt-and-suspenders, not a user-facing choice.
 
 ---
 
@@ -606,14 +661,16 @@ variable). The preset you selected determines this value:
   to push to main; feature-branch pushes are still allowed)
 - `direct` → `BLOCK_MAIN_PUSH=0`
 
-The greenfield prompt's follow-up (Step 0.6) can override the
-`locked-main-pr` default to `0`. Flip the line with a targeted `Edit`:
+The preset mapping is final — there is no user follow-up that overrides
+it. Flip the line with a targeted `Edit`:
 ```
 old: BLOCK_MAIN_PUSH=1
 new: BLOCK_MAIN_PUSH=0   # (or vice versa)
 ```
 This is the only preset-controlled line in the hook. Never regex-rewrite
-deeper into the hook file.
+deeper into the hook file. If the line is absent (old pre-toggle hook),
+run the legacy-hook upgrade flow in "Pull Latest and Update" Step 3.5
+first, then retry the `Edit`.
 
 **Note on tracking enforcement:** The tracking enforcement section in
 `block-unsafe-project.sh` (protecting `.zskills/tracking/`, blocking
@@ -740,6 +797,50 @@ Run /update-zskills to check for updates later.
    the new version to `.claude/skills/`. Show the user what changed (file
    names and a brief diff summary) before overwriting.
 
+3.5. **Legacy hook upgrade — detect and offer re-copy.** Key Rule #2
+   normally forbids overwriting existing hooks, but there are "known
+   version markers" that signal the installed hook is from an older
+   zskills version and must be upgraded for a current feature to work.
+   Run this check:
+
+   ```bash
+   HOOK="$PROJECT_ROOT/.claude/hooks/block-unsafe-generic.sh"
+   if [ -f "$HOOK" ] && ! grep -q '^BLOCK_MAIN_PUSH=' "$HOOK"; then
+     LEGACY_HOOK=1
+   fi
+   ```
+
+   The `BLOCK_MAIN_PUSH=` line was added in the preset-UX release. Its
+   absence means the installed hook predates preset flipping and
+   `/update-zskills <preset>` cannot toggle it.
+
+   When `LEGACY_HOOK=1`, tell the user exactly this:
+
+   > Your `.claude/hooks/block-unsafe-generic.sh` is from a pre-preset
+   > version of zskills and lacks the `BLOCK_MAIN_PUSH` toggle line.
+   > To use the new preset UX I need to re-copy the hook from
+   > `$ZSKILLS_PATH/hooks/block-unsafe-generic.sh`. Here is the diff
+   > of what changes:
+   >
+   > ```diff
+   > <output of: diff -u .claude/hooks/block-unsafe-generic.sh \
+   >                     $ZSKILLS_PATH/hooks/block-unsafe-generic.sh>
+   > ```
+   >
+   > Re-copy and overwrite? [Y/n]
+
+   - On `y`/`Y`/empty: `cp "$ZSKILLS_PATH/hooks/block-unsafe-generic.sh"
+     "$HOOK"` and confirm: "Hook upgraded. You can now run
+     `/update-zskills <preset>`."
+   - On `n`: leave the hook alone. Warn: "Preset flipping
+     (`/update-zskills cherry-pick` etc.) will not work until the hook
+     is upgraded. Re-run `/update-zskills` to retry, or copy
+     `$ZSKILLS_PATH/hooks/block-unsafe-generic.sh` manually."
+
+   This is the **only** exception to Key Rule #2 — re-copy happens
+   solely when a required version marker is missing AND the user
+   confirms. Do not chain other hook updates onto this flow.
+
 4. **Update installed add-ons.** Check if any block-diagram add-on skills
    are installed (e.g., `.claude/skills/add-block/SKILL.md` exists). If so,
    diff against `$ZSKILLS_PATH/block-diagram/` and update the same way.
@@ -768,8 +869,12 @@ These rules are inviolable. They apply to all modes:
 1. **NEVER overwrite existing CLAUDE.md content** — append only. New rules
    go into `## Agent Rules` at the end. Never modify or delete existing
    sections.
-2. **NEVER overwrite existing hooks or scripts** — if a file already exists,
-   skip it. The user may have customized it.
+2. **NEVER silently overwrite existing hooks or scripts** — if a file
+   already exists, skip it by default. The user may have customized it.
+   **One documented exception:** in the "Pull Latest and Update" path,
+   Step 3.5 ("Legacy hook upgrade") may re-copy a hook when a required
+   version marker is absent, AND only after showing the user the diff
+   and getting confirmation.
 3. **Explain what hooks do when installing them** — don't just list
    filenames. The user needs to understand what each hook does.
 4. **Show the user what will be installed BEFORE doing it** — no silent
