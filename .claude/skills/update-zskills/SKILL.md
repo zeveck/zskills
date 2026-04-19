@@ -12,7 +12,8 @@ dependencies.
 **Invocation:**
 
 ```
-/update-zskills [install] [--with-addons | --with-block-diagram-addons]
+/update-zskills [install] [cherry-pick | locked-main-pr | direct]
+                [--with-addons | --with-block-diagram-addons]
 ```
 
 Default mode (no argument): **smart detection** — if nothing is installed
@@ -24,12 +25,37 @@ was found and what was done about it.
 - `install` — force a full first-time setup (same as what the default
   mode does when nothing is installed, but skips the detection step)
 
+**Preset keywords (bare word, anywhere in the args):**
+
+Presets control three things at once: `execution.landing`,
+`execution.main_protected`, and the `BLOCK_MAIN_PUSH` line in
+`.claude/hooks/block-unsafe-generic.sh`. Everything else in
+`zskills-config.json` is preserved.
+
+| Preset | `execution.landing` | `execution.main_protected` | `BLOCK_MAIN_PUSH` |
+|---|---|---|---|
+| `cherry-pick` (default) | `cherry-pick` | `false` | `0` |
+| `locked-main-pr` | `pr` | `true` | `1` |
+| `direct` | `direct` | `false` | `0` |
+
+Behavior by invocation:
+- `/update-zskills <preset>` — apply that preset; no greenfield prompt.
+  If the config already exists, overwrite ONLY the three preset-owned
+  fields above; every other field (branch_prefix, tests, CI, dev_server,
+  UI patterns, timezone, min_model) is preserved.
+- `/update-zskills` **and no existing `.claude/zskills-config.json`** —
+  ask the user the greenfield prompt (see Step 0.6), then apply the
+  chosen preset and write the config.
+- `/update-zskills` **and existing config, no preset arg** — respect the
+  existing config; do NOT re-ask. This is the idempotent re-install /
+  update path.
+
 **Add-on flags:**
 - `--with-addons` — install/update core skills + ALL available add-on packs
 - `--with-block-diagram-addons` — install/update core skills + block-diagram
   add-on (3 skills: `/add-block`, `/add-example`, `/model-design`)
 
-Without an add-on flag, only the 17 core skills are installed/updated.
+Without an add-on flag, only the 18 core skills are installed/updated.
 If core is already installed, adding an add-on flag just copies the
 add-on skills (the audit detects core is satisfied and skips it).
 
@@ -73,6 +99,35 @@ portable assets are not needed and Step 0 can return early.
 Store the resolved path as `$PORTABLE` for use in install/update modes.
 If the source is a git repo, also store it as `$ZSKILLS_PATH` for use
 in update mode.
+
+---
+
+## Step 0.25 — Parse Preset Arg
+
+Scan the invocation arguments for one of these bare keywords (order
+doesn't matter; no `preset=` prefix; must be a whole word):
+
+- `cherry-pick`
+- `locked-main-pr`
+- `direct`
+
+Record the match as `$PRESET_ARG`. If none is present, `$PRESET_ARG` is
+empty. If more than one is present, stop with an error: "Specify exactly
+one preset: cherry-pick, locked-main-pr, or direct."
+
+Preset → field mapping (used wherever a preset is applied in later
+steps):
+
+| `$PRESET_ARG` | `execution.landing` | `execution.main_protected` | `BLOCK_MAIN_PUSH` |
+|---|---|---|---|
+| `cherry-pick` | `"cherry-pick"` | `false` | `0` |
+| `locked-main-pr` | `"pr"` | `true` | `1` |
+| `direct` | `"direct"` | `false` | `0` |
+
+The three affected fields are **preset-owned**. When `$PRESET_ARG` is
+non-empty, every other field in `.claude/zskills-config.json`
+(`branch_prefix`, `testing.*`, `dev_server.*`, `ui.*`, `ci.*`,
+`timezone`, `agents.min_model`) is preserved unchanged.
 
 ---
 
@@ -140,10 +195,23 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
 4. Copy `config/zskills-config.schema.json` from `$PORTABLE` to
    `.claude/zskills-config.schema.json` in the target project (so the
    `$schema` reference in the config resolves correctly).
+5. **If `$PRESET_ARG` was set** (user passed a preset keyword with an
+   existing config): rewrite ONLY the three preset-owned fields —
+   `execution.landing`, `execution.main_protected`, and
+   `BLOCK_MAIN_PUSH` in `.claude/hooks/block-unsafe-generic.sh` — using
+   the mapping table from Step 0.25. Preserve every other field in the
+   config verbatim. Prefer targeted `Edit` calls over a full Write so
+   the surrounding JSON (including `$schema`, comments, formatting,
+   and any fields the schema hasn't seen yet) stays intact. Then tell
+   the user which fields changed:
+   > Applied preset `<name>`: landing=<value>, main_protected=<value>,
+   > BLOCK_MAIN_PUSH=<value>. Other fields preserved.
 
 **If it does not exist:**
-1. Auto-detect values from the project (existing behavior).
-2. Write the config file directly using the `Write` tool. Running
+1. **If `$PRESET_ARG` is empty**, run the greenfield prompt (Step 0.6)
+   to pick a preset. Otherwise skip the prompt and use `$PRESET_ARG`.
+2. Auto-detect values from the project (existing behavior).
+3. Write the config file directly using the `Write` tool. Running
    `/update-zskills` is the user's consent — do not gate this on a paste-this-
    heredoc step. If the user's permission mode prompts for the write, that is
    Claude Code's normal flow and the user will approve.
@@ -155,8 +223,8 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
      "project_name": "<detected>",
      "timezone": "America/New_York",
      "execution": {
-       "landing": "cherry-pick",
-       "main_protected": false,
+       "landing": "<preset.landing>",
+       "main_protected": <preset.main_protected>,
        "branch_prefix": "feat/"
      },
      "testing": {
@@ -180,8 +248,16 @@ Check if `.claude/zskills-config.json` exists in the target project root (`$PROJ
      }
    }
    ```
-   Fields left empty by auto-detection stay as empty strings — the install
+   Substitute the three preset-owned placeholders (`<preset.landing>`,
+   `<preset.main_protected>`) using the Step 0.25 mapping table. Fields
+   left empty by auto-detection stay as empty strings — the install
    summary's test-setup blurb tells the user what to fill in later.
+
+4. **Set the hook toggle.** In `.claude/hooks/block-unsafe-generic.sh`,
+   change the line `BLOCK_MAIN_PUSH=<N>` to match `<preset.BLOCK_MAIN_PUSH>`
+   from Step 0.25's table. Use a targeted `Edit` (old: `BLOCK_MAIN_PUSH=1`
+   or `BLOCK_MAIN_PUSH=0`, new: the preset value). This is the only line
+   the preset controls in the hook.
 
 **Merge algorithm pseudocode:**
 ```
@@ -220,6 +296,50 @@ corresponding template section is commented out with a TODO marker:
 #   # TODO: Configure UI file patterns in .claude/zskills-config.json
 #   # UI_FILE_PATTERNS=""
 ```
+
+---
+
+## Step 0.6 — Greenfield Preset Prompt
+
+**Run this only when** `.claude/zskills-config.json` does NOT exist AND
+`$PRESET_ARG` is empty. Skip otherwise.
+
+**Do NOT use AskUserQuestion.** Ask in plain conversation text, exactly
+as shown. Wait for the user's reply before proceeding.
+
+Ask:
+
+```
+How should /run-plan land changes?
+  (1) cherry-pick — each phase squash-lands directly to main (simple, solo)
+  (2) locked-main-pr — plans become feature branches + PRs, CI, auto-merge
+      (locked main, shared repo)
+  (3) direct — work on main, no worktree isolation (minimal, risky)
+
+Default: (1). Pick one, or accept the default.
+```
+
+Map the reply:
+- `1`, `cherry-pick`, or an empty/default-accepting reply → `cherry-pick`
+- `2`, `locked-main-pr`, or `pr` → `locked-main-pr`
+- `3`, `direct` → `direct`
+
+Set `$PRESET_ARG` to the chosen preset and proceed.
+
+**Follow-up for option (2):** If the user picked `locked-main-pr`, ask:
+
+```
+Enable git-push block on main? (recommended for shared repos) [Y/n]
+```
+
+- Empty or anything starting with `y`/`Y` → `BLOCK_MAIN_PUSH=1` (default)
+- `n`/`N` → override `BLOCK_MAIN_PUSH=0` for this install; the rest of
+  the preset mapping still applies (landing=`pr`, main_protected=`true`).
+  Tell the user: "Main push block disabled — `main_protected=true` in
+  the config still blocks agent commits on main, but the hook will not
+  block `git push` to main."
+
+No follow-up for options (1) or (3) — the preset mapping is final.
 
 ---
 
@@ -473,22 +593,27 @@ Copy missing hooks from `$PORTABLE/hooks/` to `.claude/hooks/`.
 >   test output (must capture to file), verifies tests ran before commit,
 >   and optionally checks for UI verification before committing UI changes
 
-**Ask about git push blocking:**
+**Main-push block (preset-controlled):**
 
-> block-unsafe-generic.sh has an optional git push block. When enabled,
-> agents cannot push to remote — you push when ready (using `! git push`).
-> This prevents accidental pushes of incomplete work.
->
-> Enable git push blocking? (recommended for shared repos)
+`block-unsafe-generic.sh` always blocks `git push` to feature branches
+named `main` or `master` when `BLOCK_MAIN_PUSH=1` (the top-of-file
+variable). The preset you selected determines this value:
 
-If the user says yes (or in `auto` mode — default to enabled), uncomment
-the push blocking section in `.claude/hooks/block-unsafe-generic.sh`:
-```bash
-if [[ "$INPUT" =~ git[[:space:]]+push ]]; then
-  block_with_reason "BLOCKED: Agents must not push. The user decides when to push — they can run: ! git push"
-fi
+- `cherry-pick` → `BLOCK_MAIN_PUSH=0` (agent can push main; user usually
+  pushes via `! git push` anyway, and CLAUDE.md rules still forbid
+  unprompted pushes)
+- `locked-main-pr` → `BLOCK_MAIN_PUSH=1` (hook blocks any agent attempt
+  to push to main; feature-branch pushes are still allowed)
+- `direct` → `BLOCK_MAIN_PUSH=0`
+
+The greenfield prompt's follow-up (Step 0.6) can override the
+`locked-main-pr` default to `0`. Flip the line with a targeted `Edit`:
 ```
-If the user says no, leave it commented out.
+old: BLOCK_MAIN_PUSH=1
+new: BLOCK_MAIN_PUSH=0   # (or vice versa)
+```
+This is the only preset-controlled line in the hook. Never regex-rewrite
+deeper into the hook file.
 
 **Note on tracking enforcement:** The tracking enforcement section in
 `block-unsafe-project.sh` (protecting `.zskills/tracking/`, blocking
