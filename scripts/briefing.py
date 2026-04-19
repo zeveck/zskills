@@ -795,12 +795,12 @@ def format_summary(worktrees, checkboxes, commits, opts=None):
     lines.append(f'BRIEFING — {format_et()}')
     lines.append('')
 
-    # Get port for localhost URLs
+    # Get port for localhost URLs via port.sh; default 8080.
     port = '8080'
     try:
-        port_script = os.path.join(main_path, 'scripts', 'port.js')
-        if os.path.exists(port_script):
-            port = run(f'node {port_script}', cwd=main_path) or '8080'
+        port_sh = os.path.join(main_path, 'scripts', 'port.sh')
+        if os.path.exists(port_sh):
+            port = run(f'bash {port_sh}', cwd=main_path) or '8080'
     except Exception:
         pass
 
@@ -1106,12 +1106,12 @@ def format_verify(worktrees, checkboxes, opts=None):
                 cb_by_file[rel] = []
             cb_by_file[rel].append(cb)
 
-        # Get port for localhost URL
+        # Get port for localhost URL via port.sh; default 8080.
         port = '8080'
         try:
-            port_script = os.path.join(main_path, 'scripts', 'port.js')
-            if os.path.exists(port_script):
-                port = run(f'node {port_script}', cwd=main_path) or '8080'
+            port_sh = os.path.join(main_path, 'scripts', 'port.sh')
+            if os.path.exists(port_sh):
+                port = run(f'bash {port_sh}', cwd=main_path) or '8080'
         except Exception:
             pass
 

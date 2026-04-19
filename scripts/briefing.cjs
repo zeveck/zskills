@@ -700,12 +700,12 @@ function formatSummary(worktrees, checkboxes, commits, opts = {}) {
   lines.push(`BRIEFING — ${formatET()}`);
   lines.push('');
 
-  // Get port for localhost URLs
+  // Get port for localhost URLs via port.sh; default 8080.
   let port = '8080';
   try {
-    const portScript = path.join(mainPath, 'scripts', 'port.js');
-    if (fs.existsSync(portScript)) {
-      port = run(`node ${portScript}`, { cwd: mainPath }) || '8080';
+    const portSh = path.join(mainPath, 'scripts', 'port.sh');
+    if (fs.existsSync(portSh)) {
+      port = run(`bash ${portSh}`, { cwd: mainPath }) || '8080';
     }
   } catch { /* default 8080 */ }
 
@@ -1074,12 +1074,12 @@ function formatVerify(worktrees, checkboxes, opts = {}) {
         .replace(/\b\w/g, c => c.toUpperCase());
     };
 
-    // Get port for localhost URL
+    // Get port for localhost URL via port.sh; default 8080.
     let port = '8080';
     try {
-      const portScript = path.join(mainPath, 'scripts', 'port.js');
-      if (fs.existsSync(portScript)) {
-        port = run(`node ${portScript}`, { cwd: mainPath }) || '8080';
+      const portSh = path.join(mainPath, 'scripts', 'port.sh');
+      if (fs.existsSync(portSh)) {
+        port = run(`bash ${portSh}`, { cwd: mainPath }) || '8080';
       }
     } catch { /* default 8080 */ }
 
