@@ -30,13 +30,19 @@ stories.
 
 ## Quick Install
 
-Tell your agent:
+Tell your agent (copy-paste):
 
-> Clone github.com/zeveck/zskills into the project and run /update-zskills
+```
+Install zskills from github.com/zeveck/zskills — see repo for directions
+```
 
-Or follow the steps below. This is **not** a pip/npm package — do not
-`pip install` or `npm install` it. The repo contains prompt files and
-scripts that get copied into your project.
+A capable agent will clone the repo, copy the skills into your
+project, and run `/update-zskills` to complete setup. Full manual steps
+are below if you prefer to drive it yourself.
+
+This is **not** a pip/npm package — do not `pip install` or `npm install`
+it. The repo contains prompt files and scripts that get copied into your
+project.
 
 ### Steps
 
